@@ -23,18 +23,35 @@ The project bridges theoretical machine learning research with practical softwar
 ## 2. Problem Formulation
 
 Modern media and streaming platforms face fundamental algorithmic challenges when matching users to items:
-- **The Cold-Start Dilemma**: New visitors have zero interaction history. The system must immediately surface engaging, high-confidence titles without crashing or returning empty results.
-- **Extreme Vocabulary Sparsity**: Movie plot descriptions contain thousands of natural language terms. Raw word matching suffers from synonymy mismatch, unobserved negatives, and severe sparsity.
-- **Popularity Bias vs. Personalization**: Naive average ratings over-reward obscure titles with a single 5-star review, while uncalibrated popularity models continuously recommend the same blockbusters regardless of individual taste.
+
+- **The Cold-Start Dilemma:** New visitors have zero interaction history. The system must immediately surface engaging, high-confidence titles without crashing or returning empty results.
+- **Extreme Vocabulary Sparsity:** Movie plot descriptions contain thousands of natural language terms. Raw word matching suffers from synonym mismatch, unobserved negatives, and severe sparsity.
+- **Popularity Bias vs. Personalization:** Naive average ratings over-reward obscure titles with a single 5-star review, while uncalibrated popularity models continuously recommend the same blockbusters regardless of individual taste.
 
 ### Mathematical Definition of the Recommendation Task
-Given a catalogue of movies $\mathcal{M} = \{m_1, m_2, \dots, m_N\}$ and a visitor $u$ who has rated a subset of movies $\mathcal{R}_u = \{(m, r_{um}) \mid m \in \mathcal{M}, r_{um} \in [0.5, 5.0]\}$, the goal is to generate an ordered list of $K = 10$ unrated candidate movies:
+
+Given a catalogue of movies $M = \{m_1, m_2, \ldots, m_N\}$ and a visitor $u$ who has rated a subset of movies, let the user's rating history be:
 
 $$
-\text{Top-}K(u) = \operatorname*{arg\,max}_{m \in \mathcal{M} \setminus \text{Rated}(u)}^{(K)} S(u, m)
+R(u) = \{(m, r_{um}) \mid m \in M_u\}
 $$
 
-where $S(u, m)$ is the scoring function specific to each recommendation paradigm.
+where:
+
+- $M_u$ is the set of movies rated by user $u$.
+- $r_{um}$ is the rating given by user $u$ to movie $m$, where $r_{um} \in [0.5, 5.0]$.
+
+The goal is to generate an ordered list of $K = 10$ previously unrated candidate movies.
+
+The set of candidate movies is:
+
+$$
+C(u) = M \setminus M_u
+$$
+
+The recommendation system calculates a model-specific score $S(u,m)$ for every candidate movie. It sorts the candidates in descending order of their scores and returns the 10 highest-scoring movies.
+
+Here, $S(u,m)$ represents the scoring function specific to each recommendation method.
 
 ---
 
@@ -48,7 +65,7 @@ where $S(u, m)$ is the scoring function specific to each recommendation paradigm
 │ (IMDb Weighted Rating)   │ (20,000 Plot Text Features) │ (Taste & Quality Blend, α=0.5)│
 │                          │                             │                               │
 │  WR = (v/(v+m))R +       │  Pu = Σ w(r) · Vi           │  Pu = Σ max(0, r-3) · Gi      │
-│       (m/(v+m))C         │  sim = (Pu · Vm)/(||Pu||||Vm||)│  S = α G(u,m) + (1-α) Q(m)  │
+│       (m/(v+m))C         │  sim = (Pu · Vm)/(||Pu||||Vm||)│  S = α G(u,m) + (1-α) Q(m) │
 │  - No ratings required   │  - Min 5 ratings required   │  - Min 5 ratings required     │
 │  - Cold-start baseline   │  - Specific plot tropes     │  - Best offline Recall/NDCG   │
 └──────────────────────────┴─────────────────────────────┴───────────────────────────────┘
@@ -114,32 +131,53 @@ $$
 ---
 
 ### C. Genre-Based Hybrid Recommender (Taste & Quality Blend)
-* **Notebook**: `Notebooks/04_Genre_Based_Movie_Recommendation_System.ipynb`
-* **Artifact**: `Backend Artifacts/genre_model.pkl` ($12,262 \times 20$ multi-hot matrix, normalized quality scores $Q(m)$, catalogue metadata, $\alpha = 0.5$).
-* **Mathematical Formulation**:
-  1. **Multi-Hot Binary Encoding**: Each film is represented by an indicator vector $G_m \in \{0, 1\}^{20}$ across the 20 distinct catalogue genres.
-  2. **Positive-Only User Profile**: A 20-dimensional genre preference vector is constructed using positive-only weighting:
 
-$$
-P_u = \sum_{i \in \text{Rated}(u)} \max(0, r_{ui} - 3.0) \cdot G_i
-$$
+- **Notebook:** `Notebooks/04_Genre_Based_Movie_Recommendation_System.ipynb`
+- **Artifact:** `Backend Artifacts/genre_model.pkl` (12,262 movies × 20 genres, normalized quality scores, and catalogue metadata).
 
-     *Theoretical Rationale*: Disliking a specific movie does not mean the user hates the entire genre category (e.g. disliking a poorly scripted Drama should not penalize all Dramas). Non-positive weights ($\le 3.0$) are clipped to 0, ensuring $P_u$ remains strictly non-negative.
-  3. **Cosine Genre Similarity**:
+**1. Multi-Hot Binary Encoding**
 
-$$
-G(u, m) = \operatorname{clip}\left(\frac{P_u \cdot G_m}{\|P_u\| \|G_m\|}, 0, 1\right)
-$$
+Each movie is represented by a binary vector containing 20 positions, one for each genre. A value of 1 indicates that the movie belongs to that genre; 0 indicates that it does not.
 
-  4. **Hybrid Quality Score Integration**: Genre similarity is blended with normalized Bayesian movie quality scores $Q(m) \in [0, 1]$:
+**2. Positive-Only User Profile**
 
-$$
-S(u, m) = \alpha G(u, m) + (1 - \alpha) Q(m)
-$$
+The user's genre preference profile is calculated using only ratings above 3.
 
-     where $\alpha = 0.5$ provides the optimal 50/50 balance between individual genre alignment and collective cinematic quality.
-* **Serving Rule**: Requires at least **5 distinct rated movies**; returns top 10 ranked candidate recommendations.
+**Formula:**
 
+Pᵤ = Σ max(0, rᵤᵢ − 3) × Gᵢ
+
+Here:
+- Pᵤ = User's genre preference profile.
+- rᵤᵢ = Rating given by user u to movie i.
+- Gᵢ = Genre vector of movie i.
+
+Movies rated above 3 contribute to the user's genre preferences. Movies rated 3 or below do not contribute. This avoids assuming that disliking one movie means disliking its entire genre.
+
+**3. Cosine Genre Similarity**
+
+The similarity between the user's genre profile and a candidate movie is calculated using cosine similarity.
+
+**Formula:**
+
+G(u, m) = (Pᵤ · Gₘ) / (‖Pᵤ‖ × ‖Gₘ‖)
+
+A higher similarity score indicates a stronger match between the candidate movie's genres and the user's preferences.
+
+**4. Hybrid Quality Score Integration**
+
+Genre similarity is combined with the normalized Bayesian movie quality score.
+
+**Formula:**
+
+S(u, m) = α × G(u, m) + (1 − α) × Q(m)
+
+Where:
+- G(u, m) = Genre similarity between the user and movie.
+- Q(m) = Normalized Bayesian quality score of the movie.
+- α = 0.5, giving equal importance to personal genre preferences and overall movie quality.
+
+**Serving Rule:** Requires at least 5 distinct rated movies and returns the top 10 highest-ranked movies that the user has not already rated.
 ---
 
 ## 4. Dataset Description & Sources
@@ -452,12 +490,12 @@ All four notebooks are pre-executed with complete cell outputs and can be re-exe
 
 ## 13. Limitations
 
-1. **Temporal Catalogue Scope**: The catalogue is restricted to 12,794 films released between 2010 and 2017 with available TMDB mappings. Obscure foreign titles or post-2023 releases are not represented.
-2. **Cold-Start Constraint**: Personalized models (TF-IDF and Genre) require at least 5 distinct movie ratings to construct a meaningful user profile.
-3. **Vocabulary Sparsity in Text**: TF-IDF cannot recognize semantic synonyms (e.g. "astronaut" vs "cosmonaut") without dense contextual embeddings.
-4. **Coarse Genre Categorization**: With only 20 broad genres, the genre recommender cannot distinguish sub-genres (e.g. Psychological Thriller vs Slasher Horror).
-5. **Render Free-Tier Latency**: Render free instances sleep after 15 minutes of inactivity; the initial wake-up request takes ~50 seconds.
-
+1. **Temporal Catalogue Scope:** The catalogue is restricted to 12,794 films released between 2010 and 2017 with available TMDB mappings. Obscure foreign titles or post-2023 releases are not represented.
+2. **Cold-Start Constraint:** Personalized models (TF-IDF and Genre) require at least 5 distinct movie ratings to construct a meaningful user profile.
+3. **Vocabulary Sparsity in Text:** TF-IDF cannot recognize semantic synonyms (e.g., "astronaut" vs. "cosmonaut") without dense contextual embeddings.
+4. **Coarse Genre Categorization:** With only 20 broad genres, the genre recommender cannot distinguish sub-genres (e.g., Psychological Thriller vs. Slasher Horror).
+5. **Movie Image Availability:** Not all movies have available poster images in the catalogue or from the external image source. As a result, some movie cards may display a placeholder instead of a poster. This is a limitation of image availability and does not affect the recommendation algorithms or their ranking scores.
+6. **Render Free-Tier Latency:** Render free instances sleep after 15 minutes of inactivity; the initial wake-up request may take approximately 50 seconds.
 ---
 
 ## 14. Future Improvements
