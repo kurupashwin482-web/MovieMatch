@@ -30,7 +30,9 @@ Modern media and streaming platforms face fundamental algorithmic challenges whe
 ### Mathematical Definition of the Recommendation Task
 Given a catalogue of movies $\mathcal{M} = \{m_1, m_2, \dots, m_N\}$ and a visitor $u$ who has rated a subset of movies $\mathcal{R}_u = \{(m, r_{um}) \mid m \in \mathcal{M}, r_{um} \in [0.5, 5.0]\}$, the goal is to generate an ordered list of $K = 10$ unrated candidate movies:
 
-$$\text{Top-}K(u) = \arg\max_{m \in \mathcal{M} \setminus \text{Rated}(u)}^{(K)} S(u, m)$$
+$$
+\text{Top-}K(u) = \operatorname*{arg\,max}_{m \in \mathcal{M} \setminus \text{Rated}(u)}^{(K)} S(u, m)
+$$
 
 where $S(u, m)$ is the scoring function specific to each recommendation paradigm.
 
@@ -56,9 +58,11 @@ where $S(u, m)$ is the scoring function specific to each recommendation paradigm
 * **Notebook**: `Notebooks/02_popularity.ipynb`
 * **Artifact**: `dataset/processed/popularity_ranking.csv` (12,652 movies)
 * **Mathematical Formulation**:
-  To prevent obscure movies with a single 5.0-star rating from dominating top ranks, we implement the **IMDb Bayesian Weighted Rating formula**:
+  To prevent obscure movies with a single 5.0-star rating from dominating top ranks, I implement the **IMDb Bayesian Weighted Rating formula**:
 
-  $$WR(m) = \left(\frac{v}{v + m}\right) R + \left(\frac{m}{v + m}\right) C$$
+$$
+WR(m) = \left(\frac{v}{v + m}\right) R + \left(\frac{m}{v + m}\right) C
+$$
 
   where:
   - $v$: Number of user ratings for the movie (`rating_count`).
@@ -75,17 +79,36 @@ where $S(u, m)$ is the scoring function specific to each recommendation paradigm
 * **Artifacts**: `Backend Artifacts/tfidf_matrix.pkl` ($12,794 \times 20,000$ sparse matrix), `movie_id_to_index.pkl`, `tfidf_vectorizer.pkl`.
 * **Mathematical Formulation**:
   1. **Text Representation**: Term Frequency-Inverse Document Frequency extracts 20,000 unigrams and bigrams from cleaned plot summaries (`overview`):
-     $$\text{TF}(t, d) = \frac{f_{t,d}}{\sum_{t' \in d} f_{t', d}}, \quad \text{IDF}(t, D) = \ln\left(\frac{1 + |D|}{1 + |\{d \in D : t \in d\}|}\right) + 1$$
-     $$\text{TF-IDF}(t, d, D) = \text{TF}(t, d) \times \text{IDF}(t, D)$$
+
+$$
+\text{TF}(t, d) = \frac{f_{t,d}}{\sum_{t' \in d} f_{t', d}}, \quad \text{IDF}(t, D) = \ln\left(\frac{1 + |D|}{1 + |\{d \in D : t \in d\}|}\right) + 1
+$$
+
+$$
+\text{TF-IDF}(t, d, D) = \text{TF}(t, d) \times \text{IDF}(t, D)
+$$
+
   2. **Dynamic User Taste Profile**: Constructed from the visitor's ratings using a signed linear weighting scheme:
-     $$P_u = \sum_{i \in \text{Rated}(u)} w(r_{ui}) \cdot V_i$$
+
+$$
+P_u = \sum_{i \in \text{Rated}(u)} w(r_{ui}) \cdot V_i
+$$
+
      where the rating weight $w(r)$ is:
-     $$w(r) = \begin{cases} 0.1 & \text{if } r = 3.0 \\ r - 3.0 & \text{otherwise} \end{cases}$$
+
+$$
+w(r) = \begin{cases} 0.1 & \text{if } r = 3.0 \\ r - 3.0 & \text{otherwise} \end{cases}
+$$
+
      - Ratings above 3.0 positively amplify vocabulary terms (e.g., $r=5.0 \implies w=+2.0$).
      - Ratings below 3.0 penalize vocabulary terms (e.g., $r=1.0 \implies w=-2.0$).
      - Neutral ratings ($r=3.0$) provide mild positive anchoring ($w=+0.1$).
   3. **Similarity Scoring**: Computes cosine similarity between profile vector $P_u$ and all movie feature vectors $V_m$:
-     $$\text{sim}(P_u, V_m) = \frac{P_u \cdot V_m}{\|P_u\| \|V_m\|}$$
+
+$$
+\text{sim}(P_u, V_m) = \frac{P_u \cdot V_m}{\|P_u\| \|V_m\|}
+$$
+
 * **Serving Rule**: Requires at least **5 distinct rated movies**; excludes already-rated movies and movies without overviews.
 
 ---
@@ -96,12 +119,24 @@ where $S(u, m)$ is the scoring function specific to each recommendation paradigm
 * **Mathematical Formulation**:
   1. **Multi-Hot Binary Encoding**: Each film is represented by an indicator vector $G_m \in \{0, 1\}^{20}$ across the 20 distinct catalogue genres.
   2. **Positive-Only User Profile**: A 20-dimensional genre preference vector is constructed using positive-only weighting:
-     $$P_u = \sum_{i \in \text{Rated}(u)} \max(0, r_{ui} - 3.0) \cdot G_i$$
+
+$$
+P_u = \sum_{i \in \text{Rated}(u)} \max(0, r_{ui} - 3.0) \cdot G_i
+$$
+
      *Theoretical Rationale*: Disliking a specific movie does not mean the user hates the entire genre category (e.g. disliking a poorly scripted Drama should not penalize all Dramas). Non-positive weights ($\le 3.0$) are clipped to 0, ensuring $P_u$ remains strictly non-negative.
   3. **Cosine Genre Similarity**:
-     $$G(u, m) = \text{clip}\left(\frac{P_u \cdot G_m}{\|P_u\| \|G_m\|}, 0, 1\right)$$
+
+$$
+G(u, m) = \operatorname{clip}\left(\frac{P_u \cdot G_m}{\|P_u\| \|G_m\|}, 0, 1\right)
+$$
+
   4. **Hybrid Quality Score Integration**: Genre similarity is blended with normalized Bayesian movie quality scores $Q(m) \in [0, 1]$:
-     $$S(u, m) = \alpha G(u, m) + (1 - \alpha) Q(m)$$
+
+$$
+S(u, m) = \alpha G(u, m) + (1 - \alpha) Q(m)
+$$
+
      where $\alpha = 0.5$ provides the optimal 50/50 balance between individual genre alignment and collective cinematic quality.
 * **Serving Rule**: Requires at least **5 distinct rated movies**; returns top 10 ranked candidate recommendations.
 
@@ -250,22 +285,35 @@ MovieMatch/
 ## 7. Experimental Evaluation Methodology
 
 ### A. Data Splitting & User Filtering
-To evaluate personalized models objectively, we filtered the interaction history for active users with at least **100 rated catalogue movies**:
+To evaluate personalized models objectively, I filtered the interaction history for active users with at least **100 rated catalogue movies**:
 - **TF-IDF Evaluation**: 80% training history, 20% held-out test ratings per user across **4,574 active users**.
 - **Genre Evaluation**: 60% training history, 20% validation set (for hyperparameter tuning), and 20% held-out test set across **1,540 active users**.
 
 ### B. Relevance Ground Truth
 A held-out test movie is classified as a true positive ("relevant") if the user gave it a favorable rating:
 
-$$\text{Relevant}(u) = \{m \in \text{Test}(u) \mid r_{um} \ge 3.5\}$$
+$$
+\text{Relevant}(u) = \{m \in \text{Test}(u) \mid r_{um} \ge 3.5\}
+$$
 
 ### C. Evaluation Metrics (at Cutoff $K = 10$)
 1. **Precision@10**: Proportion of recommended movies that are relevant:
-   $$\text{Precision}@K = \frac{|\text{Top-}K(u) \cap \text{Relevant}(u)|}{K}$$
+
+$$
+\text{Precision}@K = \frac{|\text{Top-}K(u) \cap \text{Relevant}(u)|}{K}
+$$
+
 2. **Recall@10**: Proportion of all relevant test movies captured in the top-10 list:
-   $$\text{Recall}@K = \frac{|\text{Top-}K(u) \cap \text{Relevant}(u)|}{|\text{Relevant}(u)|}$$
+
+$$
+\text{Recall}@K = \frac{|\text{Top-}K(u) \cap \text{Relevant}(u)|}{|\text{Relevant}(u)|}
+$$
+
 3. **NDCG@10 (Normalized Discounted Cumulative Gain)**: Measures ranking quality, penalizing relevant items appearing lower in the recommended list:
-   $$\text{DCG}@K = \sum_{i=1}^K \frac{2^{\text{rel}_i} - 1}{\log_2(i + 1)}, \quad \text{NDCG}@K = \frac{\text{DCG}@K}{\text{IDCG}@K}$$
+
+$$
+\text{DCG}@K = \sum_{i=1}^K \frac{2^{\text{rel}_i} - 1}{\log_2(i + 1)}, \quad \text{NDCG}@K = \frac{\text{DCG}@K}{\text{IDCG}@K}
+$$
 
 ---
 
@@ -436,7 +484,7 @@ All four notebooks are pre-executed with complete cell outputs and can be re-exe
 
 In accordance with academic integrity guidelines for **ES 335: Machine Learning**:
 
-- **Theoretical & Algorithmic Ownership**: The foundational recommendation algorithms, formulas, rating-weighting schemes ($w(r)$), hyperparameter grid search choices ($\alpha = 0.5$), and experimental evaluations were conceived, implemented, and analyzed by the student project team.
+- **Theoretical & Algorithmic Ownership**: The foundational recommendation algorithms, formulas, rating-weighting schemes ($w(r)$), hyperparameter grid search choices ($\alpha = 0.5$), and experimental evaluations were conceived, implemented, and analyzed independently by the author.
 - **ChatGPT (OpenAI)**: Used during early project phases for conceptual discussions, exploring alternative weighting functions for rating profiles, comparing evaluation metrics (Recall vs NDCG), debugging complex Pandas merge syntax, and reviewing documentation drafts.
 - **Google Antigravity (Advanced Agentic Assistant)**: Used during system engineering phases as an interactive pair-programmer to assist with:
   - Refactoring research notebook code into modular, typed FastAPI services (`backend/app/`).
@@ -444,12 +492,15 @@ In accordance with academic integrity guidelines for **ES 335: Machine Learning*
   - Adding `AbortController` timeouts and static catalogue fallbacks to eliminate infinite loading spinners.
   - Generating automated pytest and Node integration test suites.
   - Organizing and standardizing Jupyter Notebook structures into 9–11 section academic reports.
-- **Verification**: All AI-assisted code, mathematical equations, and documentation were thoroughly reviewed, verified, and locally executed by the student team. The team takes full academic responsibility for the final submission.
+- **Verification**: All AI-assisted code, mathematical equations, and documentation were thoroughly reviewed, verified, and locally executed by the author. I take full academic responsibility for the final submission.
 
 ---
 
-## 17. Team Contributions
+## 17. Project Author & Academic Context
 
-- **Course**: ES 335 Machine Learning
+- **Author**: Ashwin Kurup
+- **Course**: ES 335: Machine Learning
 - **Institution**: Undergraduate Academic Coursework
+- **Project Structure**: Individual Course Project
 - **Core Focus**: Recommender systems, Bayesian shrinkage estimators, TF-IDF feature extraction, multi-hot genre representations, offline top-K evaluation, and full-stack ML deployment.
+- **Statement of Independence**: This project was conceived, implemented, evaluated, and documented independently by Ashwin Kurup as an individual course project for ES 335: Machine Learning.

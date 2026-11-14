@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 Format and reorganize Notebook 2: 02_popularity.ipynb
-Adheres to the 9-section structure specified in Part 3 and adds explanatory
-Markdown paragraphs after code cells as required by Part 7.
+Simplifies academic language, uses first-person singular narration ("I"),
+and provides concise step-by-step explanations below every key code cell.
 """
 import json
 from pathlib import Path
@@ -33,39 +33,40 @@ def build_notebook_2():
 
 ## 1. Introduction and Objective
 
-In recommender systems research, establishing a robust non-personalized baseline is critical before building complex personalized models. The **Popularity-Based Recommender** serves two vital functions in **MovieMatch**:
+In this notebook, I build the **Popularity-Based Recommender** for MovieMatch. This is the first of my three recommendation approaches, and it serves as the foundation and baseline for my entire project.
 
-1. **The Cold-Start Benchmark**: When a new user visits the platform, zero historical ratings or interaction signals exist. A popularity model provides high-quality, universally appealing recommendations immediately upon landing without requiring any initial user input.
-2. **The Experimental Control**: Sophisticated content-based and collaborative filtering models must demonstrate that their personalization mechanisms genuinely provide value beyond merely recommending consensus top-rated films. The popularity model serves as the ground-truth control benchmark against which TF-IDF and Genre models are compared.
+### Why I Need a Popularity Baseline
+1. **Solving the Cold-Start Problem**: When a new user visits my website, they have not rated any movies yet. Because personalized models need user preferences to work, a popularity-based model provides an immediate, high-quality list of recommendations without requiring any prior information.
+2. **Serving as an Experimental Benchmark**: In machine learning, I cannot claim that a personalized algorithm (like TF-IDF or Genre) is effective without comparing it against a simple, non-personalized baseline. The popularity model serves as that benchmark.
 
 ### Objective
-This notebook implements the Bayesian Weighted Rating algorithm popularized by IMDb. It calculates shrinkage-adjusted quality scores across all 12,652 rated films in our catalogue and exports the canonical ranking artifact: `dataset/processed/popularity_ranking.csv`."""))
+I implement the **IMDb Bayesian Weighted Rating formula** to rank all 12,652 rated movies in my catalogue and export the ranking table to `dataset/processed/popularity_ranking.csv`."""))
 
     # 2. Methodology
-    cells.append(make_cell("markdown", """## 2. Methodology: Bayesian Weighted Rating
+    cells.append(make_cell("markdown", """## 2. Methodology: IMDb Bayesian Weighted Rating
 
-A naive approach to popularity ranking simply sorts movies by their arithmetic mean rating ($R = \\frac{1}{v}\\sum r_i$). However, this leads to severe **small-sample distortion**: an obscure film with a single 5.0-star rating would outrank critically acclaimed masterpieces with tens of thousands of reviews (e.g., *Inception* or *The Dark Knight*).
+If I simply sorted movies by their raw average rating, an obscure movie with a single 5-star rating from one person would rank higher than *Inception* or *The Dark Knight* with tens of thousands of reviews.
 
-To solve this, we employ the **IMDb Bayesian Weighted Rating formula**:
+To fix this problem, I use the **IMDb Bayesian Weighted Rating formula**:
 
 $$WR = \\left(\\frac{v}{v + m}\\right) R + \\left(\\frac{m}{v + m}\\right) C$$
 
-where:
-- **$v$ (`rating_count`)**: The number of user ratings received by the movie.
-- **$R$ (`avg_rating`)**: The empirical arithmetic mean rating of the movie.
-- **$m$**: The minimum vote threshold, established as the **70th percentile** of global rating counts.
-- **$C$**: The global mean rating across all rated movies in the catalogue.
+### Variables in the Formula
+- **$v$ (`rating_count`)**: The number of ratings received by the movie.
+- **$R$ (`avg_rating`)**: The movie's arithmetic average rating.
+- **$m$**: The minimum vote threshold (I set this to the **70th percentile** of all rating counts).
+- **$C$**: The global average rating across all rated movies in the catalogue.
 
-### Mathematical Intuition & Bayesian Shrinkage
-The formula represents a shrinkage estimator:
-- When a movie has very few ratings ($v \\ll m$), the weight $\\frac{v}{v+m} \\to 0$ and $\\frac{m}{v+m} \\to 1$, pulling ($shrinking$) its score toward the catalogue prior mean $C$.
-- When a movie has substantial rating volume ($v \\gg m$), the weight $\\frac{v}{v+m} \\to 1$ and $\\frac{m}{v+m} \\to 0$, allowing its true empirical average $R$ to dominate.
-- This prevents obscure low-sample outliers from dominating top ranks while properly rewarding widely acclaimed movies."""))
+### How Bayesian Shrinkage Works
+The formula uses a concept called **shrinkage**:
+- If a movie has very few ratings ($v$ is small compared to $m$), the term $\\frac{m}{v+m}$ is large, which pulls the score closer to the overall catalogue average $C$.
+- If a movie has many ratings ($v$ is large compared to $m$), the term $\\frac{v}{v+m}$ is large, allowing the movie's actual average rating $R$ to dominate.
+- This prevents low-sample flukes from reaching the top while fairly rewarding genuinely popular and highly rated movies."""))
 
     # 3. Data Preparation
     cells.append(make_cell("markdown", """## 3. Data Preparation
 
-We import necessary libraries, resolve data paths, load the preprocessed movie catalogue (`movies_clean.csv`), and calculate the prior parameters $C$ and $m$."""))
+I import the required libraries and load the preprocessed movie catalogue (`movies_clean.csv`) that I created in Notebook 01."""))
 
     cells.append(make_cell("code", """from pathlib import Path
 import pandas as pd
@@ -76,7 +77,6 @@ import matplotlib.pyplot as plt
 NOTEBOOK_DIR = Path.cwd()
 PROJECT_ROOT = NOTEBOOK_DIR.parent if NOTEBOOK_DIR.name == "Notebooks" else NOTEBOOK_DIR
 
-# Locate cleaned movie catalogue
 candidates = [
     PROJECT_ROOT / "dataset" / "processed" / "movies_clean.csv",
     PROJECT_ROOT / "Backend Artifacts" / "movies_clean.csv",
@@ -91,62 +91,57 @@ for p in candidates:
         break
 
 if not catalogue_path:
-    raise FileNotFoundError("movies_clean.csv not found in standard paths.")
+    raise FileNotFoundError("movies_clean.csv not found.")
 
-print(f"Loading cleaned movie catalogue from: {catalogue_path}")
+print(f"Loading catalogue from: {catalogue_path}")
 movies_clean = pd.read_csv(catalogue_path)
 
-print(f"Catalogue shape: {movies_clean.shape[0]:,} movies x {movies_clean.shape[1]} columns")
-display(movies_clean[["tmdbId", "title", "release_year", "avg_rating", "rating_count"]].head())"""))
+print(f"Total movies loaded: {len(movies_clean):,}")
+display(movies_clean[["tmdbId", "title", "release_year", "avg_rating", "rating_count"]].head(3))"""))
 
-    cells.append(make_cell("markdown", """> [!NOTE]
-> **Data Inspection**: The catalogue contains 12,794 total modern movies. To compute weighted ratings, we filter for movies that have received at least one rating in our interaction dataset."""))
+    cells.append(make_cell("markdown", """### What this step does
+I load the 12,794 cleaned movies produced in Notebook 01. Each movie has its TMDB ID, title, release year, genres, plot overview, average rating, and rating count."""))
 
-    cells.append(make_cell("code", """# Filter for movies with valid rating statistics
+    cells.append(make_cell("code", """# Filter for movies that have received at least one rating
 rated_movies = movies_clean.dropna(subset=["avg_rating", "rating_count"]).copy()
 rated_movies["rating_count"] = rated_movies["rating_count"].astype(float)
 rated_movies["avg_rating"] = rated_movies["avg_rating"].astype(float)
 
-# C: Mean average rating across all rated movies
+# Compute global prior constants
 C = rated_movies["avg_rating"].mean()
-
-# m: 70th percentile threshold of rating counts
 m = rated_movies["rating_count"].quantile(0.70)
 
-print(f"Total rated movies: {len(rated_movies):,}")
-print(f"Catalogue prior mean rating (C): {C:.4f}")
-print(f"70th percentile vote count threshold (m): {m:.2f}")
+print(f"Number of rated movies: {len(rated_movies):,}")
+print(f"Global mean rating (C): {C:.4f}")
+print(f"70th percentile vote count threshold (m): {m:.2f}")"""))
 
-# Distribution summary of rating counts
-display(rated_movies[["avg_rating", "rating_count"]].describe())"""))
-
-    cells.append(make_cell("markdown", """> [!NOTE]
-> **Prior Parameter Interpretation**: The global average rating across all rated movies is $C \\approx 3.05$ (or $3.52$ in the full dataset). The 70th percentile threshold $m$ ensures that movies must possess substantial community consensus before their empirical score deviates significantly from the mean."""))
+    cells.append(make_cell("markdown", """### Explanation of Output
+- **$C \\approx 3.05$**: The average rating across all rated movies in the catalogue. This acts as the baseline prior score.
+- **$m = 17.00$** (or $43.0$ in the full dataset): The 70th percentile of rating counts. A movie needs roughly this many ratings before its score can move significantly away from $C$."""))
 
     # 4. Popularity Score Calculation
     cells.append(make_cell("markdown", """## 4. Popularity Score Calculation
 
-We vectorize the Bayesian weighted rating calculation across all 12,652 rated catalogue movies and observe the shrinkage behavior on sample films."""))
+Now I calculate the weighted rating ($WR$) for every rated movie in the catalogue using the formula above."""))
 
-    cells.append(make_cell("code", """# Compute Bayesian Weighted Rating (WR)
+    cells.append(make_cell("code", """# Calculate the weighted rating
 v = rated_movies["rating_count"]
 R = rated_movies["avg_rating"]
 
 rated_movies["weighted_rating"] = (v / (v + m)) * R + (m / (v + m)) * C
 
 print("Weighted ratings calculated successfully.")
-print("\\nSample movies showing empirical rating (R), vote count (v), and weighted rating (WR):")
-display(rated_movies[["title", "release_year", "rating_count", "avg_rating", "weighted_rating"]].head(10))"""))
+display(rated_movies[["title", "release_year", "rating_count", "avg_rating", "weighted_rating"]].head(5))"""))
 
-    cells.append(make_cell("markdown", """> [!NOTE]
-> **Shrinkage Demonstration**: For movies with low rating volume, notice how `weighted_rating` is pulled towards $C \\approx 3.05$, whereas high-volume movies retain their authentic high scores."""))
+    cells.append(make_cell("markdown", """### Explanation
+Notice how movies with few ratings have their `weighted_rating` pulled towards $C \\approx 3.05$, while movies with high rating counts maintain scores closer to their empirical average $R$."""))
 
     # 5. Generating Recommendations
     cells.append(make_cell("markdown", """## 5. Generating Recommendations
 
-We rank the catalogue by `weighted_rating` descending and define a modular, reusable recommendation function that supports filtering out already-rated items."""))
+I sort the catalogue by `weighted_rating` in descending order and define a reusable recommendation function."""))
 
-    cells.append(make_cell("code", """# Sort catalogue by weighted rating descending
+    cells.append(make_cell("code", """# Sort catalogue by weighted rating
 popularity_ranking = rated_movies.sort_values(
     by="weighted_rating",
     ascending=False
@@ -155,105 +150,90 @@ popularity_ranking = rated_movies.sort_values(
 def recommend_popular_movies(k=10, exclude_ids=None):
     \"\"\"
     Return the top K movies ranked by Bayesian weighted rating.
-
-    Parameters
-    ----------
-    k : int
-        Number of recommendations to return (default 10).
-    exclude_ids : set or list, optional
-        Set of TMDB movie IDs to exclude (e.g. movies already rated by visitor).
-
-    Returns
-    -------
-    pd.DataFrame
-        Top K recommended movies with complete metadata.
     \"\"\"
     if k <= 0:
-        raise ValueError("k must be a positive integer.")
+        raise ValueError("k must be positive.")
 
     df = popularity_ranking
     if exclude_ids:
-        exclude_set = set(exclude_ids)
-        df = df[~df["tmdbId"].isin(exclude_set)]
+        df = df[~df["tmdbId"].isin(set(exclude_ids))]
 
-    cols = [
-        "tmdbId", "title", "release_year", "genres",
-        "avg_rating", "rating_count", "weighted_rating"
-    ]
+    cols = ["tmdbId", "title", "release_year", "genres", "avg_rating", "rating_count", "weighted_rating"]
     return df.head(k)[cols]
 
-print("--- Top 10 Popularity-Based Movie Recommendations ---")
-top_10 = recommend_popular_movies(10)
-display(top_10)"""))
+print("Top 10 Popularity-Based Recommendations:")
+display(recommend_popular_movies(10))"""))
 
-    cells.append(make_cell("markdown", """> [!NOTE]
-> **Top Recommended Titles**: The top 10 recommendations feature universally recognized, critically acclaimed titles including *Inception* (2010), *Planet Earth II* (2016), and *Whiplash* (2014). Each has accumulated both high volume and high average ratings, validating the formula's effectiveness."""))
+    cells.append(make_cell("markdown", """### What the Recommendations Show
+The top-ranked movies are widely acclaimed titles like *Inception* (2010), *Planet Earth II* (2016), and *Whiplash* (2014). Each has accumulated both high volume and high average ratings. These are safe, high-confidence recommendations for visitors who have not yet rated any movies."""))
 
     # 6. Evaluation Methodology
     cells.append(make_cell("markdown", """## 6. Evaluation Methodology
 
-### Role as an Experimental Baseline
-In recommender systems evaluation, Popularity is evaluated alongside personalized models (TF-IDF and Genre) under standard top-K ranking metrics:
-1. **Precision@10**: Proportion of top-10 recommended movies that the user rated favorably in their held-out test set ($r \\ge 3.5$).
-2. **Recall@10**: Proportion of the user's total favorable test-set movies captured within the top 10 recommendations.
-3. **NDCG@10**: Normalized Discounted Cumulative Gain, penalizing relevant items appearing lower in the ranking order.
+### How I Evaluate the Baseline
+In recommender systems, I compare popularity against personalized models using standard top-10 metrics:
+- **Precision@10**: How many of the recommended 10 movies the user actually liked in their test set.
+- **Recall@10**: What percentage of all the user's liked test movies were captured in the top 10.
+- **NDCG@10**: Measures whether relevant movies appear near the top of the list.
 
-Because Popularity recommends identical consensus items to every user, its **Precision@10** on popular items is relatively competitive, but its **Recall@10** on niche personalized tastes is inherently bounded. Personalized models must demonstrate higher Recall and NDCG on user-specific preference profiles."""))
+Because the popularity model gives the same list of consensus movies to everyone, it achieves reasonable precision on popular items but low recall for users with niche tastes. This sets the benchmark that my TF-IDF and Genre models aim to beat."""))
 
     # 7. Results and Interpretation
     cells.append(make_cell("markdown", """## 7. Results and Interpretation
 
-We visualize the relationship between raw average rating ($R$) and Bayesian weighted rating ($WR$), illustrating how shrinkage penalizes small-sample variance while rewarding high-confidence consensus."""))
+I create a scatter plot comparing raw average rating ($R$) against the Bayesian weighted rating ($WR$) to visualize how the shrinkage effect works across vote volumes."""))
 
-    cells.append(make_cell("code", """# Visualizing Bayesian Shrinkage Effect
-plt.figure(figsize=(9, 5))
-scatter = plt.scatter(
+    cells.append(make_cell("code", """# Plot raw rating vs weighted rating
+fig, ax = plt.subplots(figsize=(8, 5))
+scatter = ax.scatter(
     rated_movies["rating_count"],
     rated_movies["weighted_rating"],
     c=rated_movies["avg_rating"],
     cmap="plasma",
     alpha=0.6,
-    s=20
+    s=25
 )
-plt.axhline(C, color="red", linestyle="--", label=f"Global Mean Prior (C={C:.2f})")
-plt.axvline(m, color="blue", linestyle=":", label=f"70th Percentile Threshold (m={m:.1f})")
-plt.xscale("log")
-plt.xlabel("Rating Count (log scale)", fontsize=11)
-plt.ylabel("Bayesian Weighted Rating (WR)", fontsize=11)
-plt.title("Bayesian Shrinkage: Weighted Rating vs Vote Volume", fontsize=13, fontweight="bold")
-plt.colorbar(scatter, label="Raw Average Rating (R)")
-plt.legend(loc="lower right")
-plt.grid(True, alpha=0.3)
+ax.axhline(C, color="red", linestyle="--", label=f"Global Mean (C = {C:.2f})")
+ax.axvline(m, color="blue", linestyle=":", label=f"70th Percentile (m = {m:.1f})")
+ax.set_xscale("log")
+ax.set_xlabel("Number of Ratings (Log Scale)", fontsize=10)
+ax.set_ylabel("Bayesian Weighted Rating (WR)", fontsize=10)
+ax.set_title("Bayesian Shrinkage: Weighted Rating vs Number of Ratings", fontsize=12, fontweight="bold")
+ax.grid(True, alpha=0.3)
+fig.colorbar(scatter, ax=ax, label="Raw Average Rating (R)")
+ax.legend(loc="lower right")
+
 plt.tight_layout()
 plt.show()"""))
 
-    cells.append(make_cell("markdown", """> [!NOTE]
-> **Visual Interpretation**: The plot clearly demonstrates the funnel effect of Bayesian shrinkage. At low vote volumes (left), weighted ratings converge tightly toward $C \\approx 3.05$, filtering out unstable noise. As rating volume increases toward thousands of votes (right), movies diverge based on true quality, allowing genuinely superior films to rise to the top ranks."""))
+    cells.append(make_cell("markdown", """### What the Graph Shows and Why It Matters
+This graph clearly shows the **funnel shape** of Bayesian shrinkage:
+- On the left (movies with very few ratings), scores are squashed towards the red horizontal line ($C \\approx 3.05$), filtering out noisy 5-star ratings from small sample sizes.
+- On the right (movies with hundreds or thousands of ratings), movies spread out according to their true quality, allowing genuinely great films to reach scores above 4.0."""))
 
     # 8. Error Analysis and Limitations
     cells.append(make_cell("markdown", """## 8. Error Analysis and Limitations
 
-While the Bayesian Popularity model is an essential and robust baseline, it possesses distinct limitations inherent to non-personalized recommenders:
-
-1. **Zero Personalization**: Every user receives the exact same top-10 list regardless of whether their personal taste favors horror, romantic comedy, or experimental indie cinema.
-2. **Popularity Bias & Filter Bubbles**: High-volume blockbuster movies receive perpetual exposure, creating a self-reinforcing feedback loop that prevents overlooked quality movies from ever gaining visibility.
-3. **Inability to Adapt Dynamically**: The model cannot react to visitor interactions or rating feedback; it remains static until the entire catalogue interaction history is recomputed."""))
+While this model is a robust baseline, it has clear limitations:
+1. **No Personalization**: Every user receives the exact same list regardless of their individual preferences. A fan of indie horror receives the same suggestions as a fan of romantic comedies.
+2. **Popularity Bias**: Blockbusters stay at the top, making it harder for lesser-known quality films to be discovered.
+3. **Static Nature**: The recommendations do not change until global rating counts are updated."""))
 
     # 9. Conclusion
     cells.append(make_cell("markdown", """## 9. Conclusion
 
 ### Summary
-The Popularity-Based Recommender successfully delivers a reliable, robust, and zero-setup baseline for MovieMatch. By employing the Bayesian IMDb formula with 70th-percentile shrinkage, it avoids small-sample bias and surfaces universally acclaimed films.
+The Popularity-Based Recommender provides an effective, reliable baseline that prevents small-sample rating bias and requires zero user input.
 
-### Artifact Export & Production Use
-We export the precomputed ranking table to `dataset/processed/popularity_ranking.csv`. The MovieMatch application uses this artifact to serve instantaneous, anonymous popularity recommendations on the live web platform."""))
+### Saving the Processed Artifact
+I export the ranked table to `dataset/processed/popularity_ranking.csv`. My web application uses this file to serve instant popularity recommendations to visitors."""))
 
-    cells.append(make_cell("code", """# Export popularity ranking artifact
+    cells.append(make_cell("code", """# Save canonical popularity rankings
 output_csv = PROJECT_ROOT / "dataset" / "processed" / "popularity_ranking.csv"
 output_csv.parent.mkdir(parents=True, exist_ok=True)
 
 popularity_ranking.to_csv(output_csv, index=False)
-print(f"Saved canonical popularity rankings ({len(popularity_ranking):,} movies) to: {output_csv}")"""))
+print(f"Saved popularity rankings ({len(popularity_ranking):,} movies) to: {output_csv}")"""))
 
     nb_data = {
         "cells": cells,
