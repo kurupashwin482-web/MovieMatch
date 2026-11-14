@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: moviematch-backend
+    env: python
+    region: ohio
+    plan: free
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.3
+      - key: ENVIRONMENT
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: CORS_ORIGINS
+        value: https://kurupashwin482-web.github.io,http://localhost:5173
+      - key: TMDB_API_KEY
+        sync: false

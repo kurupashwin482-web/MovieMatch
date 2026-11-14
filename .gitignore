@@ -7,13 +7,42 @@ venv/
 # Python cache
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
 
 # Jupyter checkpoints
 .ipynb_checkpoints/
 
 # Environment variables and secrets
 .env
+.env.*
+!.env.example
+
+# Local SQLite databases
+*.db
+*.sqlite
+*.sqlite3
+moviematch.db
+
+# Node / Frontend
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Logs and test caches
+*.log
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Editor directories
+.vscode/
+.idea/
+*.swp
+*.swo
 
 # Large raw datasets
 dataset/raw/credits.csv
 dataset/raw/ratings.csv
+
