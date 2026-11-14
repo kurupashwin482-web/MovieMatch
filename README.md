@@ -3,7 +3,6 @@
 **Course:** ES 335: Machine Learning (Undergraduate Course Project)  
 **Public Web Application:** [https://kurupashwin482-web.github.io/MovieMatch/](https://kurupashwin482-web.github.io/MovieMatch/)  
 **Live Backend API:** [https://moviematch-backend.onrender.com](https://moviematch-backend.onrender.com)  
-**Development Repository Branch:** [`backend-n-api-integration`](https://github.com/kurupashwin482-web/MovieMatch/tree/backend-n-api-integration)
 
 ---
 
