@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Flame, Compass, Dna, RefreshCw, Lock, Sparkles, AlertCircle } from 'lucide-react';
 import { MovieCard } from './MovieCard';
 import { api } from '../services/api';
@@ -11,7 +11,11 @@ export const RecommendationSection = ({ onExploreClick, onRateMovie }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  // Track request sequence to prevent tab-switching race conditions
+  const requestIdRef = useRef(0);
+
   const fetchRecommendations = useCallback(async (tab) => {
+    const currentId = ++requestIdRef.current;
     setLoading(true);
     setError(null);
 
@@ -27,16 +31,21 @@ export const RecommendationSection = ({ onExploreClick, onRateMovie }) => {
         const payload = getRatingsPayload();
         data = await api.getGenreRecommendations(payload, 10);
       }
-      setMovies(data.movies || []);
+
+      if (currentId !== requestIdRef.current) return;
+      setMovies(data?.movies || []);
     } catch (err) {
+      if (currentId !== requestIdRef.current) return;
       if (err.status === 400 && (tab === 'tfidf' || tab === 'genre')) {
         setError(err.message || 'At least 5 ratings required for personalized recommendations.');
       } else {
-        setError(err.message || 'Failed to load recommendations.');
+        setError(err.message || 'Failed to load recommendations. Please try again.');
       }
       setMovies([]);
     } finally {
-      setLoading(false);
+      if (currentId === requestIdRef.current) {
+        setLoading(false);
+      }
     }
   }, [getRatingsPayload, getRatedMovieIds]);
 
@@ -46,6 +55,7 @@ export const RecommendationSection = ({ onExploreClick, onRateMovie }) => {
     } else {
       setMovies([]);
       setError(null);
+      setLoading(false);
     }
   }, [activeTab, personalizedUnlocked, fetchRecommendations]);
 

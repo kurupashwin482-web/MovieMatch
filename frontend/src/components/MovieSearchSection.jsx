@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Search, X, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Search, X, Filter, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
 import { MovieCard } from './MovieCard';
 import { api } from '../services/api';
 
@@ -14,22 +14,33 @@ export const MovieSearchSection = ({ onRateMovie }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Load genres once
+  // Track latest request ID to ignore stale responses
+  const requestIdRef = useRef(0);
+
+  // Load genres once at mount
   useEffect(() => {
+    let isMounted = true;
     const fetchGenres = async () => {
       try {
         const list = await api.getGenres();
-        setGenres(list || []);
+        if (isMounted && Array.isArray(list) && list.length > 0) {
+          setGenres(list);
+        }
       } catch (err) {
         console.error('Failed to load genres:', err);
       }
     };
     fetchGenres();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const searchMovies = useCallback(async (q, g, p) => {
+    const currentId = ++requestIdRef.current;
     setLoading(true);
     setError(null);
+
     try {
       const data = await api.searchMovies({
         query: q,
@@ -37,18 +48,33 @@ export const MovieSearchSection = ({ onRateMovie }) => {
         page: p,
         limit,
       });
+
+      // Ignore if a newer request was dispatched
+      if (currentId !== requestIdRef.current) return;
+
       setMovies(data.movies || []);
       setTotal(data.total || 0);
     } catch (err) {
-      setError(err.message || 'Failed to search movies.');
+      if (currentId !== requestIdRef.current) return;
+      setError(err.message || 'Failed to search movies. Please try again.');
       setMovies([]);
     } finally {
-      setLoading(false);
+      if (currentId === requestIdRef.current) {
+        setLoading(false);
+      }
     }
   }, [limit]);
 
+  // Debounced search trigger on query, genre, or page change
   useEffect(() => {
-    searchMovies(query, selectedGenre, page);
+    const timer = setTimeout(
+      () => {
+        searchMovies(query, selectedGenre, page);
+      },
+      query ? 250 : 0
+    );
+
+    return () => clearTimeout(timer);
   }, [query, selectedGenre, page, searchMovies]);
 
   const handleSearchSubmit = (e) => {
@@ -67,7 +93,14 @@ export const MovieSearchSection = ({ onRateMovie }) => {
     setPage(1);
   };
 
+  const handleResetFilters = () => {
+    setQuery('');
+    setSelectedGenre('');
+    setPage(1);
+  };
+
   const totalPages = Math.ceil(total / limit) || 1;
+  const hasActiveFilters = Boolean(query || selectedGenre);
 
   return (
     <div className="search-section-container">
@@ -78,9 +111,12 @@ export const MovieSearchSection = ({ onRateMovie }) => {
             <Search size={18} className="search-icon" />
             <input
               type="text"
-              placeholder="Search movies by title (e.g. Inception, Avengers, Batman)..."
+              placeholder="Search movies by title (e.g. Inception, Dark Knight, Toy Story)..."
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setPage(1);
+              }}
               className="search-input"
             />
             {query && (
@@ -110,6 +146,18 @@ export const MovieSearchSection = ({ onRateMovie }) => {
               ))}
             </select>
           </div>
+
+          {hasActiveFilters && (
+            <button
+              type="button"
+              className="btn-reset-filters"
+              onClick={handleResetFilters}
+              title="Reset all search filters"
+            >
+              <RotateCcw size={14} />
+              <span>Reset</span>
+            </button>
+          )}
         </form>
 
         <div className="search-summary-row">
@@ -124,7 +172,7 @@ export const MovieSearchSection = ({ onRateMovie }) => {
         </div>
       </div>
 
-      {/* Movies Grid */}
+      {/* Movies Grid / Status */}
       {loading ? (
         <div className="loading-state">
           <div className="spinner" />
@@ -133,10 +181,27 @@ export const MovieSearchSection = ({ onRateMovie }) => {
       ) : error ? (
         <div className="error-state">
           <p>{error}</p>
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => searchMovies(query, selectedGenre, page)}
+          >
+            Try Again
+          </button>
         </div>
       ) : movies.length === 0 ? (
         <div className="empty-state">
           <p>No movies matched your search query. Try another keyword or genre.</p>
+          {hasActiveFilters && (
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={handleResetFilters}
+              style={{ marginTop: '1rem' }}
+            >
+              Clear Filters
+            </button>
+          )}
         </div>
       ) : (
         <div className="movies-grid">

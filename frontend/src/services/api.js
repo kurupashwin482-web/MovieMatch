@@ -1,18 +1,80 @@
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/+$/, '');
+const API_BASE_URL = ((typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) || 'http://localhost:8000').replace(/\/+$/, '');
+const BASE_PATH = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '/';
+
+// Fallback genres in case of offline/disconnected environment
+const FALLBACK_GENRES = [
+  'Action', 'Adventure', 'Animation', 'Comedy', 'Crime',
+  'Documentary', 'Drama', 'Family', 'Fantasy', 'Foreign',
+  'History', 'Horror', 'Music', 'Mystery', 'Romance',
+  'Science Fiction', 'TV Movie', 'Thriller', 'War', 'Western'
+];
+
+let cachedCatalogue = null;
+let cachedGenres = null;
+let cachedPopularity = null;
+
+async function loadStaticCatalogue() {
+  if (cachedCatalogue) return cachedCatalogue;
+  try {
+    const url = `${BASE_PATH.replace(/\/+$/, '')}/data/catalogue.json`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    cachedCatalogue = await res.json();
+    return cachedCatalogue;
+  } catch (err) {
+    console.warn('Could not load static catalogue.json:', err);
+    return [];
+  }
+}
+
+async function loadStaticGenres() {
+  if (cachedGenres) return cachedGenres;
+  try {
+    const url = `${BASE_PATH.replace(/\/+$/, '')}/data/genres.json`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    cachedGenres = await res.json();
+    return cachedGenres;
+  } catch (err) {
+    console.warn('Could not load static genres.json, using fallback:', err);
+    cachedGenres = FALLBACK_GENRES;
+    return cachedGenres;
+  }
+}
+
+async function loadStaticPopularity() {
+  if (cachedPopularity) return cachedPopularity;
+  try {
+    const url = `${BASE_PATH.replace(/\/+$/, '')}/data/popularity.json`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    cachedPopularity = await res.json();
+    return cachedPopularity;
+  } catch (err) {
+    console.warn('Could not load static popularity.json:', err);
+    return null;
+  }
+}
 
 class ApiService {
-  async request(endpoint, options = {}) {
+  async request(endpoint, options = {}, timeoutMs = 4500) {
     const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
     const headers = {
       'Content-Type': 'application/json',
       ...options.headers,
     };
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
     try {
       const response = await fetch(url, {
         ...options,
         headers,
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       if (response.status === 204) {
         return null;
@@ -30,66 +92,248 @@ class ApiService {
 
       return data;
     } catch (err) {
+      clearTimeout(timeoutId);
+
+      if (err.name === 'AbortError') {
+        const timeoutError = new Error(`Request to ${endpoint} timed out after ${timeoutMs}ms.`);
+        timeoutError.status = 504;
+        throw timeoutError;
+      }
+
       if (err.name === 'TypeError' && err.message.includes('fetch')) {
-        const offlineError = new Error('Backend server is currently unreachable. If using Render, the free instance may take ~50 seconds to spin up. Please try again in a moment.');
+        const offlineError = new Error(
+          'Backend service is unreachable. Serving data from high-speed client-side catalogue.'
+        );
         offlineError.status = 503;
         throw offlineError;
       }
+
       throw err;
     }
   }
 
   // Catalogue Endpoints
   async getGenres() {
-    return this.request('/movies/genres');
+    try {
+      const list = await this.request('/movies/genres', {}, 3500);
+      if (Array.isArray(list) && list.length > 0) {
+        return list;
+      }
+    } catch (err) {
+      // Backend unavailable or timed out; fall back to static genres
+    }
+    return loadStaticGenres();
   }
 
   async searchMovies({ query = '', genre = '', page = 1, limit = 24 } = {}) {
-    const params = new URLSearchParams();
-    if (query) params.append('query', query);
-    if (genre) params.append('genre', genre);
-    params.append('page', page);
-    params.append('limit', limit);
-    return this.request(`/movies/search?${params.toString()}`);
+    try {
+      const params = new URLSearchParams();
+      if (query) params.append('query', query);
+      if (genre) params.append('genre', genre);
+      params.append('page', page);
+      params.append('limit', limit);
+
+      return await this.request(`/movies/search?${params.toString()}`, {}, 4000);
+    } catch (err) {
+      // Client-side fallback search
+      const catalogue = await loadStaticCatalogue();
+      let filtered = catalogue;
+
+      if (query && query.trim()) {
+        const q = query.trim().toLowerCase();
+        filtered = filtered.filter((m) => m.title && m.title.toLowerCase().includes(q));
+      }
+
+      if (genre && genre.trim()) {
+        const g = genre.trim();
+        filtered = filtered.filter((m) => Array.isArray(m.genres) && m.genres.includes(g));
+      }
+
+      const total = filtered.length;
+      const start = Math.max(0, (page - 1) * limit);
+      const end = start + limit;
+      const movies = filtered.slice(start, end);
+
+      return {
+        total,
+        page,
+        limit,
+        movies,
+      };
+    }
   }
 
   async getMovieById(movieId) {
-    return this.request(`/movies/${movieId}`);
+    try {
+      return await this.request(`/movies/${movieId}`, {}, 3500);
+    } catch (err) {
+      const catalogue = await loadStaticCatalogue();
+      const numId = Number(movieId);
+      const found = catalogue.find((m) => m.tmdbId === numId);
+      if (found) return found;
+      const notFoundError = new Error(`Movie with ID ${movieId} not found.`);
+      notFoundError.status = 404;
+      throw notFoundError;
+    }
   }
 
   // Recommendation Endpoints (Stateless Anonymous Inference)
   async getPopularityRecommendations(ratedMovieIds = [], k = 10) {
-    return this.request('/recommendations/popularity', {
-      method: 'POST',
-      body: JSON.stringify({
-        rated_movie_ids: ratedMovieIds,
-        k,
-      }),
-    });
+    try {
+      return await this.request(
+        '/recommendations/popularity',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            rated_movie_ids: ratedMovieIds,
+            k,
+          }),
+        },
+        4000
+      );
+    } catch (err) {
+      // Fallback popularity ranking
+      const ratedSet = new Set((ratedMovieIds || []).map(Number));
+      const popList = (await loadStaticPopularity()) || (await loadStaticCatalogue());
+      const filtered = popList.filter((m) => !ratedSet.has(m.tmdbId)).slice(0, k);
+      return {
+        movies: filtered.map((m) => ({
+          ...m,
+          score_type: 'popularity_rank',
+        })),
+      };
+    }
   }
 
   async getTfidfRecommendations(ratingsDict, k = 10) {
-    return this.request('/recommendations/tfidf', {
-      method: 'POST',
-      body: JSON.stringify({
-        ratings: ratingsDict,
-        k,
-      }),
-    });
+    try {
+      return await this.request(
+        '/recommendations/tfidf',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            ratings: ratingsDict,
+            k,
+          }),
+        },
+        6000
+      );
+    } catch (err) {
+      // Client-side fallback content-based matching
+      const catalogue = await loadStaticCatalogue();
+      const ratedIds = new Set(Object.keys(ratingsDict).map(Number));
+
+      // Build preference terms from highly rated movies
+      const positiveMovies = catalogue.filter(
+        (m) => ratedIds.has(m.tmdbId) && (ratingsDict[m.tmdbId] || 0) >= 3.0
+      );
+
+      const prefGenres = new Set();
+      const prefWords = new Set();
+      for (const m of positiveMovies) {
+        (m.genres || []).forEach((g) => prefGenres.add(g));
+        (m.overview || '')
+          .toLowerCase()
+          .replace(/[^a-z0-9 ]/g, '')
+          .split(/\s+/)
+          .filter((w) => w.length > 4)
+          .forEach((w) => prefWords.add(w));
+      }
+
+      const scored = catalogue
+        .filter((m) => !ratedIds.has(m.tmdbId))
+        .map((m) => {
+          let genreMatches = 0;
+          (m.genres || []).forEach((g) => {
+            if (prefGenres.has(g)) genreMatches += 1;
+          });
+
+          let wordMatches = 0;
+          const words = (m.overview || '')
+            .toLowerCase()
+            .replace(/[^a-z0-9 ]/g, '')
+            .split(/\s+/);
+          for (const w of words) {
+            if (prefWords.has(w)) wordMatches += 1;
+          }
+
+          const score = (genreMatches * 0.4) + Math.min(1.0, wordMatches * 0.05) + ((m.avg_rating || 3.0) * 0.1);
+          return {
+            ...m,
+            score: Number(score.toFixed(4)),
+            score_type: 'tfidf_content',
+          };
+        });
+
+      scored.sort((a, b) => (b.score || 0) - (a.score || 0));
+      return { movies: scored.slice(0, k) };
+    }
   }
 
   async getGenreRecommendations(ratingsDict, k = 10) {
-    return this.request('/recommendations/genre', {
-      method: 'POST',
-      body: JSON.stringify({
-        ratings: ratingsDict,
-        k,
-      }),
-    });
+    try {
+      return await this.request(
+        '/recommendations/genre',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            ratings: ratingsDict,
+            k,
+          }),
+        },
+        6000
+      );
+    } catch (err) {
+      // Client-side genre preference profile matching
+      const catalogue = await loadStaticCatalogue();
+      const ratedIds = new Set(Object.keys(ratingsDict).map(Number));
+
+      // Build genre profile: profile[g] = sum(max(0, rating - 3.0))
+      const genreScores = {};
+      for (const [idStr, rating] of Object.entries(ratingsDict)) {
+        const id = Number(idStr);
+        const weight = Math.max(0, Number(rating) - 3.0);
+        const movie = catalogue.find((m) => m.tmdbId === id);
+        if (movie && Array.isArray(movie.genres)) {
+          for (const g of movie.genres) {
+            genreScores[g] = (genreScores[g] || 0) + weight;
+          }
+        }
+      }
+
+      const normProfile = Math.sqrt(
+        Object.values(genreScores).reduce((sum, v) => sum + v * v, 0)
+      ) || 1.0;
+
+      const scored = catalogue
+        .filter((m) => !ratedIds.has(m.tmdbId))
+        .map((m) => {
+          const mGenres = m.genres || [];
+          let dotProduct = 0;
+          for (const g of mGenres) {
+            if (genreScores[g]) {
+              dotProduct += genreScores[g];
+            }
+          }
+          const mNorm = Math.sqrt(mGenres.length) || 1.0;
+          const genreSim = Math.min(1.0, Math.max(0.0, dotProduct / (normProfile * mNorm)));
+          const quality = Math.min(1.0, Math.max(0.0, ((m.avg_rating || 3.0) - 1.0) / 4.0));
+          const score = 0.5 * genreSim + 0.5 * quality;
+
+          return {
+            ...m,
+            score: Number(score.toFixed(4)),
+            score_type: 'genre_blend',
+          };
+        });
+
+      scored.sort((a, b) => (b.score || 0) - (a.score || 0));
+      return { movies: scored.slice(0, k) };
+    }
   }
 
   async checkHealth() {
-    return this.request('/health');
+    return this.request('/health', {}, 2500);
   }
 }
 

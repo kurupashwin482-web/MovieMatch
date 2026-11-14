@@ -20,7 +20,7 @@ export const RatingProgressBar = ({ onExploreClick }) => {
             <h4 className="progress-title">
               {personalizedUnlocked
                 ? 'Personalized Recommendations Unlocked!'
-                : 'Unlock Personalized Recommendations (No Login Required)'}
+                : 'Unlock Personalized Recommendations'}
             </h4>
             <p className="progress-subtitle">
               {personalizedUnlocked
