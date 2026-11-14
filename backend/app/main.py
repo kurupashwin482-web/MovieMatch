@@ -1,22 +1,14 @@
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import text
-from sqlalchemy.orm import Session
 
 from backend.app.config import CORS_ORIGINS, ENVIRONMENT
-from backend.app.database import init_db, get_db
 from backend.app.utils.catalogue import catalogue
 from backend.app.recommenders.popularity import popularity_recommender
 from backend.app.recommenders.tfidf import tfidf_recommender
 from backend.app.recommenders.genre import genre_recommender
-from backend.app.routers import (
-    auth_router,
-    movies_router,
-    ratings_router,
-    recommendations_router,
-)
+from backend.app.routers import movies_router, recommendations_router
 
 # Configure logging
 logging.basicConfig(
@@ -28,18 +20,14 @@ logger = logging.getLogger("moviematch.app")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan: initialize database and load model artifacts once at startup."""
-    logger.info("Initializing MovieMatch backend...")
+    """Application lifespan: pre-load movie catalogue and ML model artifacts once at startup."""
+    logger.info("Initializing MovieMatch ML backend...")
 
-    # 1. Initialize DB tables
-    logger.info("Creating database tables if not existing...")
-    init_db()
-
-    # 2. Load movie catalogue
+    # 1. Load movie catalogue
     logger.info("Pre-loading movie catalogue...")
     catalogue.load()
 
-    # 3. Load recommendation models once
+    # 2. Load recommendation models
     logger.info("Pre-loading Popularity recommender...")
     popularity_recommender.load()
 
@@ -49,19 +37,19 @@ async def lifespan(app: FastAPI):
     logger.info("Pre-loading Genre recommender...")
     genre_recommender.load()
 
-    logger.info("All MovieMatch models and datasets loaded successfully. Ready to serve requests!")
+    logger.info("All MovieMatch models loaded successfully. Serving anonymous recommendation requests!")
     yield
     logger.info("MovieMatch backend shutting down.")
 
 
 app = FastAPI(
     title="MovieMatch API",
-    description="Machine Learning Movie Recommendation Platform API",
-    version="1.0.0",
+    description="Machine Learning Movie Recommendation Platform API (Anonymous Inference)",
+    version="2.0.0",
     lifespan=lifespan
 )
 
-# Configure CORS
+# Configure CORS for GitHub Pages and local development
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS if CORS_ORIGINS != ["*"] else ["*"],
@@ -71,9 +59,7 @@ app.add_middleware(
 )
 
 # Include Routers
-app.include_router(auth_router)
 app.include_router(movies_router)
-app.include_router(ratings_router)
 app.include_router(recommendations_router)
 
 
@@ -82,31 +68,27 @@ def root():
     """Root entrypoint."""
     return {
         "name": "MovieMatch API",
-        "version": "1.0.0",
+        "version": "2.0.0",
         "status": "healthy",
         "docs_url": "/docs"
     }
 
 
 @app.get("/health", tags=["Health"])
-def health_check(db: Session = Depends(get_db)):
-    """Health check endpoint to verify database and ML model readiness."""
-    db_status = "healthy"
-    try:
-        db.execute(text("SELECT 1"))
-    except Exception as e:
-        db_status = f"unhealthy: {str(e)}"
+def health_check():
+    """Health check endpoint to verify ML model readiness."""
+    models_ready = {
+        "catalogue": catalogue.is_loaded,
+        "popularity": popularity_recommender.is_loaded,
+        "tfidf": tfidf_recommender.is_loaded,
+        "genre": genre_recommender.is_loaded,
+    }
+    all_ready = all(models_ready.values())
 
     return {
-        "status": "ok" if db_status == "healthy" else "degraded",
+        "status": "ok" if all_ready else "degraded",
         "environment": ENVIRONMENT,
-        "database": db_status,
-        "models": {
-            "catalogue": catalogue.is_loaded,
-            "popularity": popularity_recommender.is_loaded,
-            "tfidf": tfidf_recommender.is_loaded,
-            "genre": genre_recommender.is_loaded,
-        }
+        "models": models_ready
     }
 
 

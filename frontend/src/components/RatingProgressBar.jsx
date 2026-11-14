@@ -1,9 +1,9 @@
 import React from 'react';
 import { Sparkles, Lock, Unlock, Film } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { useRatings } from '../context/RatingsContext';
 
 export const RatingProgressBar = ({ onExploreClick }) => {
-  const { ratingsCount, requiredRatings, personalizedUnlocked } = useAuth();
+  const { ratingsCount, requiredRatings, personalizedUnlocked } = useRatings();
 
   const progressPercent = Math.min(100, Math.round((ratingsCount / requiredRatings) * 100));
 
@@ -20,12 +20,12 @@ export const RatingProgressBar = ({ onExploreClick }) => {
             <h4 className="progress-title">
               {personalizedUnlocked
                 ? 'Personalized Recommendations Unlocked!'
-                : 'Unlock Personalized Recommendations'}
+                : 'Unlock Personalized Recommendations (No Login Required)'}
             </h4>
             <p className="progress-subtitle">
               {personalizedUnlocked
-                ? `You have rated ${ratingsCount} movies. TF-IDF and Genre models are actively tailored to your taste.`
-                : `Rate at least ${requiredRatings} movies to train your personalized TF-IDF and Genre profiles.`}
+                ? `You have rated ${ratingsCount} movies. Your ratings are stored locally in your browser and used to compute TF-IDF and Genre models.`
+                : `Rate at least ${requiredRatings} movies to construct your dynamic TF-IDF and Genre preference profiles.`}
             </p>
           </div>
         </div>

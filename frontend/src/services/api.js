@@ -1,26 +1,6 @@
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/+$/, '');
 
 class ApiService {
-  constructor() {
-    this.token = localStorage.getItem('moviematch_token');
-  }
-
-  setToken(token) {
-    this.token = token;
-    if (token) {
-      localStorage.setItem('moviematch_token', token);
-    } else {
-      localStorage.removeItem('moviematch_token');
-    }
-  }
-
-  getToken() {
-    if (!this.token) {
-      this.token = localStorage.getItem('moviematch_token');
-    }
-    return this.token;
-  }
-
   async request(endpoint, options = {}) {
     const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
     const headers = {
@@ -28,18 +8,12 @@ class ApiService {
       ...options.headers,
     };
 
-    const token = this.getToken();
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
     try {
       const response = await fetch(url, {
         ...options,
         headers,
       });
 
-      // Handle 204 No Content
       if (response.status === 204) {
         return null;
       }
@@ -47,7 +21,8 @@ class ApiService {
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        const error = new Error(data.detail || `Request failed with status ${response.status}`);
+        const message = data.detail || `Request failed with status ${response.status}`;
+        const error = new Error(message);
         error.status = response.status;
         error.data = data;
         throw error;
@@ -55,51 +30,21 @@ class ApiService {
 
       return data;
     } catch (err) {
-      if (err.status === 401) {
-        // Token expired or invalid
-        this.setToken(null);
+      if (err.name === 'TypeError' && err.message.includes('fetch')) {
+        const offlineError = new Error('Backend server is currently unreachable. If using Render, the free instance may take ~50 seconds to spin up. Please try again in a moment.');
+        offlineError.status = 503;
+        throw offlineError;
       }
       throw err;
     }
   }
 
-  // Auth Endpoints
-  async register(username, email, password) {
-    const res = await this.request('/auth/register', {
-      method: 'POST',
-      body: JSON.stringify({ username, email, password }),
-    });
-    if (res.access_token) {
-      this.setToken(res.access_token);
-    }
-    return res;
-  }
-
-  async login(username, password) {
-    const res = await this.request('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ username, password }),
-    });
-    if (res.access_token) {
-      this.setToken(res.access_token);
-    }
-    return res;
-  }
-
-  async getMe() {
-    return this.request('/auth/me');
-  }
-
-  logout() {
-    this.setToken(null);
-  }
-
-  // Movies Endpoints
+  // Catalogue Endpoints
   async getGenres() {
     return this.request('/movies/genres');
   }
 
-  async searchMovies({ query = '', genre = '', page = 1, limit = 20 } = {}) {
+  async searchMovies({ query = '', genre = '', page = 1, limit = 24 } = {}) {
     const params = new URLSearchParams();
     if (query) params.append('query', query);
     if (genre) params.append('genre', genre);
@@ -112,42 +57,35 @@ class ApiService {
     return this.request(`/movies/${movieId}`);
   }
 
-  // Ratings Endpoints
-  async rateMovie(movieId, rating) {
-    return this.request('/ratings', {
+  // Recommendation Endpoints (Stateless Anonymous Inference)
+  async getPopularityRecommendations(ratedMovieIds = [], k = 10) {
+    return this.request('/recommendations/popularity', {
       method: 'POST',
-      body: JSON.stringify({ movie_id: movieId, rating }),
+      body: JSON.stringify({
+        rated_movie_ids: ratedMovieIds,
+        k,
+      }),
     });
   }
 
-  async getUserRatings() {
-    return this.request('/ratings/me');
-  }
-
-  async updateRating(movieId, rating) {
-    return this.request(`/ratings/${movieId}`, {
-      method: 'PUT',
-      body: JSON.stringify({ rating }),
+  async getTfidfRecommendations(ratingsDict, k = 10) {
+    return this.request('/recommendations/tfidf', {
+      method: 'POST',
+      body: JSON.stringify({
+        ratings: ratingsDict,
+        k,
+      }),
     });
   }
 
-  async deleteRating(movieId) {
-    return this.request(`/ratings/${movieId}`, {
-      method: 'DELETE',
+  async getGenreRecommendations(ratingsDict, k = 10) {
+    return this.request('/recommendations/genre', {
+      method: 'POST',
+      body: JSON.stringify({
+        ratings: ratingsDict,
+        k,
+      }),
     });
-  }
-
-  // Recommendation Endpoints
-  async getPopularityRecommendations(k = 10) {
-    return this.request(`/recommendations/popularity?k=${k}`);
-  }
-
-  async getTfidfRecommendations(k = 10) {
-    return this.request(`/recommendations/tfidf?k=${k}`);
-  }
-
-  async getGenreRecommendations(k = 10) {
-    return this.request(`/recommendations/genre?k=${k}`);
   }
 
   async checkHealth() {

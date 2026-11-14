@@ -1,7 +1,13 @@
 name: Deploy Frontend to GitHub Pages
 
 on:
-  # Prepared for Part 2 deployment (manual trigger or future merge to main)
+  push:
+    branches:
+      - backend-n-api-integration
+      - main
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/deploy-pages.yml'
   workflow_dispatch:
 
 permissions:
@@ -37,7 +43,6 @@ jobs:
         run: npm run build
         env:
           VITE_BASE_PATH: '/MovieMatch/'
-          # In Part 2, set secrets.VITE_API_BASE_URL to Render backend URL
           VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL || 'https://moviematch-backend.onrender.com' }}
 
       - name: Upload Pages Artifact

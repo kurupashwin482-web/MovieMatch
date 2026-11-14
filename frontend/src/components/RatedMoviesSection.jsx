@@ -1,45 +1,21 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Star, Film, Sparkles, RefreshCw } from 'lucide-react';
+import React, { useState } from 'react';
+import { Trash2, Film, Sparkles, CheckCircle2 } from 'lucide-react';
 import { MovieCard } from './MovieCard';
-import { api } from '../services/api';
-import { useAuth } from '../context/AuthContext';
+import { useRatings } from '../context/RatingsContext';
 
-export const RatedMoviesSection = ({ onRateMovie, onDeleteRating, onExploreClick }) => {
-  const { refreshRatingsCount } = useAuth();
-  const [ratings, setRatings] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+export const RatedMoviesSection = ({ onExploreClick, onRateMovie, onDeleteRating, onClearRatings }) => {
+  const { ratings, ratingsCount, clearRatings } = useRatings();
+  const [showConfirmClear, setShowConfirmClear] = useState(false);
 
-  const fetchUserRatings = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await api.getUserRatings();
-      setRatings(data.ratings || []);
-    } catch (err) {
-      setError(err.message || 'Failed to load your rated movies.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const ratedList = Object.values(ratings).sort(
+    (a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0)
+  );
 
-  useEffect(() => {
-    fetchUserRatings();
-  }, [fetchUserRatings]);
-
-  const handleDelete = async (movieId) => {
-    if (onDeleteRating) {
-      await onDeleteRating(movieId);
-      setRatings((prev) => prev.filter((r) => r.movie_id !== movieId));
-    }
-  };
-
-  const handleRate = async (movieId, score) => {
-    if (onRateMovie) {
-      await onRateMovie(movieId, score);
-      setRatings((prev) =>
-        prev.map((r) => (r.movie_id === movieId ? { ...r, rating: score } : r))
-      );
+  const handleClearAll = () => {
+    clearRatings();
+    setShowConfirmClear(false);
+    if (onClearRatings) {
+      onClearRatings();
     }
   };
 
@@ -47,62 +23,83 @@ export const RatedMoviesSection = ({ onRateMovie, onDeleteRating, onExploreClick
     <div className="rated-movies-container">
       <div className="section-header-row">
         <div>
-          <h2 className="section-title">⭐ Your Rated Movies</h2>
+          <h2 className="section-title">⭐ Your Rated Movies ({ratingsCount})</h2>
           <p className="section-subtitle">
-            These ratings shape your personalized TF-IDF and Genre recommendation profiles.
+            Stored locally in your browser. These ratings dynamically shape your personalized TF-IDF and Genre recommendation profiles.
           </p>
         </div>
 
-        <button
-          type="button"
-          className="btn-refresh"
-          onClick={fetchUserRatings}
-          disabled={loading}
-          title="Reload rated movies"
-        >
-          <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-          <span>Reload</span>
-        </button>
+        {ratingsCount > 0 && (
+          <div className="rated-actions-bar">
+            {showConfirmClear ? (
+              <div className="confirm-clear-box">
+                <span className="confirm-clear-text">Clear all {ratingsCount} ratings?</span>
+                <button
+                  type="button"
+                  className="btn-danger-confirm"
+                  onClick={handleClearAll}
+                >
+                  Yes, Clear All
+                </button>
+                <button
+                  type="button"
+                  className="btn-cancel"
+                  onClick={() => setShowConfirmClear(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="btn-clear-all"
+                onClick={() => setShowConfirmClear(true)}
+                title="Remove all ratings from browser storage"
+              >
+                <Trash2 size={15} />
+                <span>Clear All Ratings</span>
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
-      {loading ? (
-        <div className="loading-state">
-          <div className="spinner" />
-          <p>Loading your ratings...</p>
-        </div>
-      ) : error ? (
-        <div className="error-state">
-          <p>{error}</p>
-          <button className="btn-secondary" onClick={fetchUserRatings}>
-            Retry
-          </button>
-        </div>
-      ) : ratings.length === 0 ? (
+      {ratingsCount === 0 ? (
         <div className="empty-state">
           <Film size={44} className="empty-icon" />
-          <h3>No ratings yet!</h3>
-          <p>You haven't rated any movies yet. Explore the catalogue and rate at least 5 movies.</p>
+          <h3>No ratings stored yet!</h3>
+          <p>
+            Your ratings will be saved in your browser's local storage. Rate at least 5 movies to unlock personalized content-based and genre-based recommendations.
+          </p>
           {onExploreClick && (
             <button className="btn-primary-action" onClick={onExploreClick}>
               <Sparkles size={18} />
-              <span>Explore Movies Now</span>
+              <span>Explore & Rate Movies</span>
             </button>
           )}
         </div>
       ) : (
         <div className="movies-grid">
-          {ratings.map((item) => {
-            if (!item.movie) return null;
+          {ratedList.map((item) => {
             const movieData = {
-              ...item.movie,
+              tmdbId: item.tmdbId,
+              title: item.title,
+              release_year: item.release_year,
+              genres: item.genres,
+              poster_url: item.poster_url,
+              poster_path: item.poster_path,
+              overview: item.overview,
+              avg_rating: item.avg_rating,
+              rating_count: item.rating_count,
               user_rating: item.rating,
             };
+
             return (
               <MovieCard
-                key={item.movie_id}
+                key={item.tmdbId}
                 movie={movieData}
-                onRate={handleRate}
-                onDeleteRating={handleDelete}
+                onRate={onRateMovie}
+                onDeleteRating={onDeleteRating}
                 isRatedView={true}
               />
             );

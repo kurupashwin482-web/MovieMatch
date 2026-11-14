@@ -21,27 +21,15 @@ ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 PORT = int(os.getenv("PORT", 8000))
 HOST = os.getenv("HOST", "0.0.0.0")
 
-# Security and JWT
-SECRET_KEY = os.getenv("SECRET_KEY", "moviematch-super-secret-production-key-2026-ml-course-deepmind-quality")
-ALGORITHM = os.getenv("ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 60 * 24))  # 24 hours
-
-# Database configuration
-RAW_DB_URL = os.getenv("DATABASE_URL", f"sqlite:///{REPO_ROOT / 'moviematch.db'}")
-# Normalize PostgreSQL URL if provided as postgres:// (required for SQLAlchemy 2+)
-if RAW_DB_URL.startswith("postgres://"):
-    DATABASE_URL = RAW_DB_URL.replace("postgres://", "postgresql://", 1)
-else:
-    DATABASE_URL = RAW_DB_URL
-
-# CORS Origins
+# CORS Origins (includes GitHub Pages public origin without subpath)
 raw_cors = os.getenv(
     "CORS_ORIGINS",
-    "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000,https://kurupashwin482-web.github.io"
+    "https://kurupashwin482-web.github.io,http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000"
 )
 CORS_ORIGINS: List[str] = [origin.strip() for origin in raw_cors.split(",") if origin.strip()]
 
-# TMDB API
+# TMDB API (Optional: used for fallback poster metadata fetching)
+# Keep backend-only, never expose to frontend
 TMDB_API_KEY = os.getenv("TMDB_API_KEY", "").strip()
 TMDB_IMAGE_BASE_URL = "https://image.tmdb.org/t/p/w500"
 

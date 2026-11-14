@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Film, Calendar, Star, Info } from 'lucide-react';
+import { Film, Calendar, Star } from 'lucide-react';
 import { StarRating } from './StarRating';
+import { useRatings } from '../context/RatingsContext';
 
 export const MovieCard = ({
   movie,
@@ -8,8 +9,8 @@ export const MovieCard = ({
   onRate,
   onDeleteRating,
   isRatedView = false,
-  isSubmitting = false,
 }) => {
+  const { getRatingForMovie, rateMovie, removeRating } = useRatings();
   const [imageError, setImageError] = useState(false);
   const [showFullOverview, setShowFullOverview] = useState(false);
 
@@ -22,14 +23,23 @@ export const MovieCard = ({
     avg_rating,
     rating_count,
     poster_url,
-    user_rating,
     score,
     score_type,
   } = movie;
 
+  const currentRating = movie.user_rating !== undefined ? movie.user_rating : getRatingForMovie(tmdbId);
+
   const handleRatingChange = (newRating) => {
+    rateMovie(movie, newRating);
     if (onRate) {
-      onRate(tmdbId, newRating);
+      onRate(movie, newRating);
+    }
+  };
+
+  const handleDelete = () => {
+    removeRating(tmdbId);
+    if (onDeleteRating) {
+      onDeleteRating(tmdbId);
     }
   };
 
@@ -64,7 +74,7 @@ export const MovieCard = ({
   };
 
   return (
-    <div className={`movie-card ${user_rating ? 'is-rated' : ''}`}>
+    <div className={`movie-card ${currentRating ? 'is-rated' : ''}`}>
       {rank !== undefined && <div className="rank-badge">#{rank}</div>}
 
       <div className="poster-container">
@@ -138,22 +148,20 @@ export const MovieCard = ({
         <div className="card-rating-footer">
           <div className="rating-action-wrap">
             <span className="rating-label-hint">
-              {user_rating ? 'Your Rating:' : 'Rate this movie:'}
+              {currentRating ? 'Your Rating:' : 'Rate this movie:'}
             </span>
             <StarRating
-              rating={user_rating || 0}
+              rating={currentRating || 0}
               onRate={handleRatingChange}
-              disabled={isSubmitting}
               size={18}
             />
           </div>
 
-          {isRatedView && onDeleteRating && (
+          {isRatedView && (
             <button
               type="button"
               className="btn-delete-rating"
-              onClick={() => onDeleteRating(tmdbId)}
-              disabled={isSubmitting}
+              onClick={handleDelete}
               title="Remove your rating"
             >
               Remove

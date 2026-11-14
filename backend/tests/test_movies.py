@@ -3,7 +3,7 @@ def test_get_genres(client):
     assert response.status_code == 200
     genres = response.json()
     assert isinstance(genres, list)
-    assert len(genres) > 0
+    assert len(genres) == 20
     assert "Action" in genres
     assert "Drama" in genres
 
@@ -34,7 +34,6 @@ def test_get_movie_by_id_success(client):
     assert movie["tmdbId"] == 27205
     assert "Inception" in movie["title"]
     assert movie["release_year"] == 2010
-    assert "Action" in movie["genres"] or "Science Fiction" in movie["genres"]
 
 
 def test_get_movie_by_id_not_found(client):

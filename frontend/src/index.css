@@ -106,6 +106,16 @@ body {
   letter-spacing: -0.5px;
 }
 
+.brand-subtag {
+  display: block;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin-top: -2px;
+  font-weight: 700;
+}
+
 .brand-accent {
   color: var(--accent-red);
 }
@@ -1109,6 +1119,78 @@ body {
   font-size: 0.92rem;
 }
 
+.rated-actions-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.btn-clear-all {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #f87171;
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-clear-all:hover {
+  background-color: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.confirm-clear-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: var(--bg-card);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  padding: 6px 12px;
+  border-radius: var(--radius-md);
+}
+
+.confirm-clear-text {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #f87171;
+}
+
+.btn-danger-confirm {
+  background-color: #ef4444;
+  color: #fff;
+  border: none;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btn-danger-confirm:hover {
+  background-color: #dc2626;
+}
+
+.btn-cancel {
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.btn-cancel:hover {
+  color: #fff;
+}
+
 /* Auth Modal */
 .auth-modal-backdrop {
   position: fixed;
@@ -1367,10 +1449,24 @@ body {
 
 .app-footer {
   text-align: center;
-  padding: 24px;
+  padding: 30px 20px;
   border-top: 1px solid var(--border-subtle);
   color: var(--text-muted);
-  font-size: 0.85rem;
+  font-size: 0.88rem;
+  background-color: var(--bg-secondary);
+}
+
+.footer-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.footer-subtext {
+  font-size: 0.78rem;
+  color: var(--text-muted);
 }
 
 /* Keyframes */

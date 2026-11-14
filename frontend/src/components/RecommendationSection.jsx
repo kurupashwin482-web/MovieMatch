@@ -2,10 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Flame, Compass, Dna, RefreshCw, Lock, Sparkles, AlertCircle } from 'lucide-react';
 import { MovieCard } from './MovieCard';
 import { api } from '../services/api';
-import { useAuth } from '../context/AuthContext';
+import { useRatings } from '../context/RatingsContext';
 
-export const RecommendationSection = ({ onRateMovie, onExploreClick }) => {
-  const { ratingsCount, requiredRatings, personalizedUnlocked } = useAuth();
+export const RecommendationSection = ({ onExploreClick, onRateMovie }) => {
+  const { ratingsCount, requiredRatings, personalizedUnlocked, getRatingsPayload, getRatedMovieIds } = useRatings();
   const [activeTab, setActiveTab] = useState('popularity');
   const [movies, setMovies] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -18,11 +18,14 @@ export const RecommendationSection = ({ onRateMovie, onExploreClick }) => {
     try {
       let data;
       if (tab === 'popularity') {
-        data = await api.getPopularityRecommendations(10);
+        const ratedIds = getRatedMovieIds();
+        data = await api.getPopularityRecommendations(ratedIds, 10);
       } else if (tab === 'tfidf') {
-        data = await api.getTfidfRecommendations(10);
+        const payload = getRatingsPayload();
+        data = await api.getTfidfRecommendations(payload, 10);
       } else if (tab === 'genre') {
-        data = await api.getGenreRecommendations(10);
+        const payload = getRatingsPayload();
+        data = await api.getGenreRecommendations(payload, 10);
       }
       setMovies(data.movies || []);
     } catch (err) {
@@ -35,10 +38,9 @@ export const RecommendationSection = ({ onRateMovie, onExploreClick }) => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [getRatingsPayload, getRatedMovieIds]);
 
   useEffect(() => {
-    // Only attempt personalized fetch if unlocked, or if popularity
     if (activeTab === 'popularity' || personalizedUnlocked) {
       fetchRecommendations(activeTab);
     } else {
@@ -91,10 +93,10 @@ export const RecommendationSection = ({ onRateMovie, onExploreClick }) => {
           className="btn-refresh"
           onClick={() => fetchRecommendations(activeTab)}
           disabled={loading || isTabLocked}
-          title="Refresh recommendations"
+          title="Regenerate recommendations"
         >
           <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-          <span>Refresh</span>
+          <span>Generate / Refresh</span>
         </button>
       </div>
 
@@ -104,8 +106,8 @@ export const RecommendationSection = ({ onRateMovie, onExploreClick }) => {
           <div>
             <h4 className="info-title">🔥 Bayesian Popularity Ranking</h4>
             <p className="info-desc">
-              Ranks movies using the IMDb weighted rating formula based on overall mean rating and rating frequency.
-              Excludes movies you have already rated. Available immediately.
+              Ranks movies using the IMDb weighted rating formula based on global rating counts and averages.
+              Automatically excludes movies you have already rated. Does not require 5 ratings.
             </p>
           </div>
         )}
@@ -113,8 +115,8 @@ export const RecommendationSection = ({ onRateMovie, onExploreClick }) => {
           <div>
             <h4 className="info-title">🎯 Content-Based Profile Matching (TF-IDF)</h4>
             <p className="info-desc">
-              Builds a personalized vector profile across 20,000 TF-IDF plot summary features from your movie ratings.
-              Positive ratings amplify themes, while negative ratings suppress them.
+              Builds a personalized vector profile across 20,000 TF-IDF plot summary features from your submitted ratings.
+              Ratings above 3 amplify themes, while ratings below 3 penalize them.
             </p>
           </div>
         )}
@@ -140,13 +142,13 @@ export const RecommendationSection = ({ onRateMovie, onExploreClick }) => {
           </h3>
           <p className="locked-subtext">
             {activeTab === 'tfidf' ? 'TF-IDF Content' : 'Genre-Based'} recommendations require at least{' '}
-            <strong>{requiredRatings} movie ratings</strong> to learn your taste profile.
+            <strong>{requiredRatings} movie ratings</strong> to construct your taste profile.
           </p>
           <div className="locked-progress-badge">
             Currently rated: <strong>{ratingsCount}</strong> / {requiredRatings}
           </div>
           <p className="locked-hint">
-            Rate {requiredRatings - ratingsCount} more movie{requiredRatings - ratingsCount > 1 ? 's' : ''} to unlock this recommender.
+            Rate {requiredRatings - ratingsCount} more movie{requiredRatings - ratingsCount > 1 ? 's' : ''} in the explore section to unlock this model.
           </p>
           {onExploreClick && (
             <button className="btn-primary-action" onClick={onExploreClick}>
