@@ -1,0 +1,19 @@
+
+# Python virtual environments
+ml_env/
+venv/
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# Environment variables and secrets
+.env
+
+# Large raw datasets
+dataset/raw/credits.csv
+dataset/raw/ratings.csv
