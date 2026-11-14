@@ -1,0 +1,237 @@
+/**
+ * Comprehensive Automated Verification Suite for MovieMatch Frontend
+ * Simulates browser localStorage and runs thorough tests for Parts 5A through 5G.
+ */
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const rootDir = path.resolve(__dirname, '..');
+
+// Mock localStorage in Node
+const mockLocalStorage = (() => {
+  let store = {};
+  return {
+    getItem: (key) => store[key] || null,
+    setItem: (key, val) => { store[key] = String(val); },
+    removeItem: (key) => { delete store[key]; },
+    clear: () => { store = {}; },
+    _dump: () => store,
+  };
+})();
+globalThis.localStorage = mockLocalStorage;
+
+// Mock window and navigator if needed
+globalThis.window = { localStorage: mockLocalStorage };
+
+// Mock fetch to load static files directly from frontend/public/data or dist/data
+const cataloguePath = path.join(rootDir, 'frontend/public/data/catalogue.json');
+const genresPath = path.join(rootDir, 'frontend/public/data/genres.json');
+const popularityPath = path.join(rootDir, 'frontend/public/data/popularity.json');
+
+const catalogueData = JSON.parse(fs.readFileSync(cataloguePath, 'utf-8'));
+const genresData = JSON.parse(fs.readFileSync(genresPath, 'utf-8'));
+const popularityData = JSON.parse(fs.readFileSync(popularityPath, 'utf-8'));
+
+globalThis.fetch = async (url, options = {}) => {
+  const urlStr = String(url);
+  if (urlStr.includes('/data/catalogue.json')) {
+    return {
+      ok: true,
+      status: 200,
+      json: async () => catalogueData,
+    };
+  }
+  if (urlStr.includes('/data/genres.json')) {
+    return {
+      ok: true,
+      status: 200,
+      json: async () => genresData,
+    };
+  }
+  if (urlStr.includes('/data/popularity.json')) {
+    return {
+      ok: true,
+      status: 200,
+      json: async () => popularityData,
+    };
+  }
+  // Simulate offline / unreachable backend for remote URLs
+  if (urlStr.startsWith('http')) {
+    const error = new TypeError('Failed to fetch');
+    throw error;
+  }
+  return {
+    ok: false,
+    status: 404,
+    json: async () => ({ detail: 'Not found' }),
+  };
+};
+
+async function runTests() {
+  console.log('====================================================');
+  console.log('MovieMatch Frontend Automated Verification Suite');
+  console.log('====================================================\n');
+
+  let passed = 0;
+  let failed = 0;
+
+  function assert(condition, testName, details = '') {
+    if (condition) {
+      console.log(`  [PASS] ${testName} ${details}`);
+      passed++;
+    } else {
+      console.error(`  [FAIL] ${testName} ${details}`);
+      failed++;
+    }
+  }
+
+  // Import services
+  const { storage } = await import('../frontend/src/services/storage.js');
+  const { api } = await import('../frontend/src/services/api.js');
+
+  // TEST A: Initial application & wording
+  console.log('--- TEST A: Initial Application & Wording ---');
+  mockLocalStorage.clear();
+  const initialRatings = storage.getRatings();
+  assert(Object.keys(initialRatings).length === 0, 'LocalStorage cleared initially');
+
+  const ratingProgressSource = fs.readFileSync(path.join(rootDir, 'frontend/src/components/RatingProgressBar.jsx'), 'utf-8');
+  assert(!ratingProgressSource.includes('No Login Required'), 'No "(No Login Required)" wording in RatingProgressBar.jsx');
+  assert(ratingProgressSource.includes('Unlock Personalized Recommendations'), 'Clean "Unlock Personalized Recommendations" title present');
+
+  // TEST B: Catalogue Loading
+  console.log('\n--- TEST B: Movie Catalogue Loading ---');
+  const startCat = performance.now();
+  const catResult = await api.searchMovies({ page: 1, limit: 24 });
+  const catTime = (performance.now() - startCat).toFixed(1);
+  assert(catResult.total >= 2000, `Catalogue contains ${catResult.total} movies (loaded in ${catTime}ms)`);
+  assert(catResult.movies.length === 24, `Page 1 returns 24 movies`);
+  const firstMovie = catResult.movies[0];
+  assert(firstMovie && firstMovie.tmdbId && firstMovie.title, `Movie metadata intact (Title: "${firstMovie.title}", ID: ${firstMovie.tmdbId})`);
+
+  // TEST C: Search Functionality
+  console.log('\n--- TEST C: Search Queries ---');
+  // 1. Inception
+  const inceptionRes = await api.searchMovies({ query: 'Inception' });
+  const foundInception = inceptionRes.movies.some(m => m.title.toLowerCase().includes('inception'));
+  assert(foundInception, `Search "Inception" returns results (Found: ${inceptionRes.total})`);
+
+  // 2. The Dark Knight
+  const dkRes = await api.searchMovies({ query: 'The Dark Knight' });
+  const foundDK = dkRes.movies.some(m => m.title.toLowerCase().includes('dark knight'));
+  assert(foundDK, `Search "The Dark Knight" returns results (Found: ${dkRes.total})`);
+
+  // 3. Toy Story
+  const tsRes = await api.searchMovies({ query: 'Toy Story' });
+  const foundTS = tsRes.movies.some(m => m.title.toLowerCase().includes('toy story'));
+  assert(foundTS, `Search "Toy Story" returns results (Found: ${tsRes.total})`);
+
+  // 4. Partial title
+  const partialRes = await api.searchMovies({ query: 'Incep' });
+  assert(partialRes.movies.some(m => m.title.toLowerCase().includes('inception')), `Partial title search "Incep" works`);
+
+  // 5. Capitalization variation
+  const capRes = await api.searchMovies({ query: 'iNcEpTiOn' });
+  assert(capRes.movies.some(m => m.title.toLowerCase().includes('inception')), `Case-insensitive search "iNcEpTiOn" works`);
+
+  // 6. Nonexistent title
+  const noneRes = await api.searchMovies({ query: 'NonexistentMovieXYZ999' });
+  assert(noneRes.total === 0 && noneRes.movies.length === 0, `Nonexistent search returns 0 results cleanly`);
+
+  // TEST D: Genre Options & Filtering
+  console.log('\n--- TEST D: Genre Options & Filtering ---');
+  const genres = await api.getGenres();
+  assert(genres.length === 20, `Genre list populated with all ${genres.length} genres`);
+  assert(genres.includes('Action') && genres.includes('Science Fiction') && genres.includes('Drama'), 'Common genres present');
+
+  // Filter by Action
+  const actionRes = await api.searchMovies({ genre: 'Action', limit: 20 });
+  const allAction = actionRes.movies.every(m => m.genres.includes('Action'));
+  assert(allAction && actionRes.total > 0, `Filter "Action" returns only Action movies (${actionRes.total} total)`);
+
+  // Combined search + genre
+  const combinedRes = await api.searchMovies({ query: 'Batman', genre: 'Action' });
+  const allMatch = combinedRes.movies.every(m => m.title.toLowerCase().includes('batman') && m.genres.includes('Action'));
+  assert(allMatch && combinedRes.total > 0, `Combined search "Batman" + genre "Action" works (${combinedRes.total} total)`);
+
+  // TEST E: Movie Ratings & LocalStorage
+  console.log('\n--- TEST E: Movie Ratings & LocalStorage Persistence ---');
+  const testMovie1 = { tmdbId: 27205, title: 'Inception', release_year: 2010, genres: ['Action', 'Sci-Fi'] };
+  const testMovie2 = { tmdbId: 49026, title: 'The Dark Knight Rises', release_year: 2012, genres: ['Action', 'Thriller'] };
+  const testMovie3 = { tmdbId: 10193, title: 'Toy Story 3', release_year: 2010, genres: ['Animation', 'Comedy'] };
+  const testMovie4 = { tmdbId: 680, title: 'Pulp Fiction', release_year: 1994, genres: ['Crime', 'Drama'] };
+  const testMovie5 = { tmdbId: 157336, title: 'Interstellar', release_year: 2014, genres: ['Adventure', 'Sci-Fi'] };
+
+  // 1. Rate movie 1
+  storage.saveRating(testMovie1, 5.0);
+  let saved = storage.getRatings();
+  assert(saved['27205'] && saved['27205'].rating === 5.0, 'Rating saved to localStorage (5.0 stars)');
+
+  // 2. Update rating
+  storage.saveRating(testMovie1, 4.5);
+  saved = storage.getRatings();
+  assert(saved['27205'].rating === 4.5, 'Rating updated cleanly without duplicate (4.5 stars)');
+
+  // 3. Remove rating
+  storage.removeRating(27205);
+  saved = storage.getRatings();
+  assert(!saved['27205'], 'Rating removed from localStorage');
+
+  // 4. Rate 5 distinct movies
+  storage.saveRating(testMovie1, 5.0);
+  storage.saveRating(testMovie2, 4.5);
+  storage.saveRating(testMovie3, 4.0);
+  storage.saveRating(testMovie4, 5.0);
+  storage.saveRating(testMovie5, 4.5);
+  saved = storage.getRatings();
+  const count = Object.keys(saved).length;
+  assert(count === 5, `5 distinct movie ratings recorded in localStorage (Count: ${count})`);
+
+  // 5. Test payload extraction
+  const payload = storage.getRatingsPayload();
+  assert(payload[27205] === 5.0 && payload[157336] === 4.5, 'Ratings payload formatted correctly for API');
+  const ratedIds = storage.getRatedMovieIds();
+  assert(ratedIds.length === 5, 'Rated movie IDs list formatted correctly');
+
+  // TEST F: Recommendations
+  console.log('\n--- TEST F: Recommendation Methods ---');
+  // 1. Popularity recommendation (works without ratings and excludes rated)
+  const popRec = await api.getPopularityRecommendations(ratedIds, 10);
+  assert(popRec.movies.length === 10, `Popularity recommendations returned 10 movies`);
+  const anyRatedInPop = popRec.movies.some(m => ratedIds.includes(m.tmdbId));
+  assert(!anyRatedInPop, `Popularity recommendations successfully exclude user's rated movies`);
+
+  // 2. Genre recommendations
+  const genreRec = await api.getGenreRecommendations(payload, 10);
+  assert(genreRec.movies.length === 10, `Genre recommendations returned 10 movies`);
+  const genreFirst = genreRec.movies[0];
+  assert(genreFirst && genreFirst.score !== undefined, `Genre recommendation contains similarity score (${genreFirst.score})`);
+
+  // 3. TF-IDF recommendations
+  const tfidfRec = await api.getTfidfRecommendations(payload, 10);
+  assert(tfidfRec.movies.length === 10, `TF-IDF recommendations returned 10 movies`);
+  const tfidfFirst = tfidfRec.movies[0];
+  assert(tfidfFirst && tfidfFirst.score !== undefined, `TF-IDF recommendation contains match score (${tfidfFirst.score})`);
+
+  // TEST G: Clear ratings
+  console.log('\n--- TEST G: Clear Ratings ---');
+  storage.clearAll();
+  const cleared = storage.getRatings();
+  assert(Object.keys(cleared).length === 0, 'All ratings successfully cleared');
+
+  console.log('\n====================================================');
+  console.log(`SUMMARY: ${passed} PASSED, ${failed} FAILED`);
+  console.log('====================================================');
+
+  if (failed > 0) {
+    process.exit(1);
+  }
+}
+
+runTests().catch(err => {
+  console.error('Test suite failed with unexpected error:', err);
+  process.exit(1);
+});
