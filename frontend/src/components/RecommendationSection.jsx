@@ -12,9 +12,6 @@ export const RecommendationSection = ({ onExploreClick, onRateMovie }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [isFallback, setIsFallback] = useState(false);
-  const [retryingLive, setRetryingLive] = useState(false);
-  const [connectionMessage, setConnectionMessage] = useState('');
-  const [connectionError, setConnectionError] = useState(null);
 
   // Track request sequence to prevent tab-switching race conditions
   const requestIdRef = useRef(0);
@@ -41,7 +38,13 @@ export const RecommendationSection = ({ onExploreClick, onRateMovie }) => {
 
       if (currentId !== requestIdRef.current) return;
       setMovies(data?.movies || []);
-      setIsFallback(Boolean(data?.is_fallback));
+      const fallbackActive = Boolean(data?.is_fallback);
+      setIsFallback(fallbackActive);
+      if (fallbackActive) {
+        console.warn('[MovieMatch] Live backend unreachable; served high-speed client-side recommendations.');
+      } else {
+        console.info('[MovieMatch] Loaded recommendations from live ML backend.');
+      }
     } catch (err) {
       if (currentId !== requestIdRef.current) return;
       if (err.status === 400 && (tab === 'tfidf' || tab === 'genre')) {
@@ -57,48 +60,21 @@ export const RecommendationSection = ({ onExploreClick, onRateMovie }) => {
     }
   }, [getRatingsPayload, getRatedMovieIds, topK]);
 
-  // Connect to live backend with multi-attempt progressive health checks
-  const handleConnectLiveBackend = useCallback(async () => {
-    setRetryingLive(true);
-    setConnectionError(null);
-    setConnectionMessage('Pinging cloud backend (attempt 1 of 5)...');
-
-    const result = await api.waitForBackend({
-      maxAttempts: 5,
-      timeoutPerAttempt: 9000,
-      intervalMs: 2500,
-      onProgress: ({ attempt, maxAttempts }) => {
-        setConnectionMessage(
-          `Waking up cloud backend (attempt ${attempt} of ${maxAttempts})...`
-        );
-      },
-    });
-
-    if (result.ready) {
-      setConnectionMessage('Backend connected! Loading live recommendations...');
-      setConnectionError(null);
-      await fetchRecommendations(activeTab, topK);
-      setIsFallback(false);
-      setRetryingLive(false);
-      setConnectionMessage('');
-    } else {
-      setRetryingLive(false);
-      setConnectionMessage('');
-      setConnectionError(
-        result.error || 'Live backend service did not respond after 5 attempts. Continuing with client-side fallback.'
-      );
-    }
-  }, [activeTab, topK, fetchRecommendations]);
-
-  // On mount: check if live backend is already responsive
+  // On mount: check if live backend is responsive
   useEffect(() => {
     let active = true;
     const probe = async () => {
-      const alive = await api.checkHealth(3500);
-      if (!active) return;
-      if (alive) {
-        setIsFallback(false);
-        setConnectionError(null);
+      try {
+        const alive = await api.checkHealth(3500);
+        if (!active) return;
+        if (alive) {
+          setIsFallback(false);
+          console.info('[MovieMatch] Live ML backend is online at', api.getBaseUrl());
+        } else {
+          console.warn('[MovieMatch] Live ML backend asleep or unreachable at', api.getBaseUrl(), '; serving client-side fallback.');
+        }
+      } catch {
+        // Silent fallback handling
       }
     };
     probe();
@@ -224,43 +200,6 @@ export const RecommendationSection = ({ onExploreClick, onRateMovie }) => {
         )}
       </div>
 
-      {/* Fallback notification when cloud ML backend is asleep or spinning up */}
-      {isFallback && !isTabLocked && !loading && (
-        <div className="fallback-banner">
-          <div className="fallback-banner-content">
-            <span className="fallback-pill">Offline / Cold-Start Fallback</span>
-            <span className="fallback-text">
-              The live cloud ML backend (Render free tier) is currently asleep or spinning up. Displaying high-speed client-side recommendations.
-            </span>
-          </div>
-          <button
-            type="button"
-            className="btn-retry-live"
-            onClick={handleConnectLiveBackend}
-            disabled={loading || retryingLive}
-            title="Attempt to connect to the live FastAPI backend on Render"
-          >
-            <RefreshCw size={14} className={retryingLive ? 'animate-spin' : ''} />
-            <span>{retryingLive ? (connectionMessage || 'Connecting (~30s)...') : 'Connect to Live Backend'}</span>
-          </button>
-          {connectionError && (
-            <div className="connection-error-box" style={{
-              width: '100%',
-              marginTop: '10px',
-              padding: '10px 14px',
-              background: 'rgba(239, 68, 68, 0.12)',
-              border: '1px solid rgba(239, 68, 68, 0.35)',
-              borderRadius: '6px',
-              color: '#fca5a5',
-              fontSize: '0.84rem',
-              lineHeight: '1.45',
-            }}>
-              <strong>Connection Notice:</strong> {connectionError}
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Locked State for TF-IDF / Genre if ratings < 5 */}
       {isTabLocked ? (
         <div className="locked-view-card">
@@ -290,11 +229,7 @@ export const RecommendationSection = ({ onExploreClick, onRateMovie }) => {
       ) : loading ? (
         <div className="loading-state">
           <div className="spinner" />
-          <p>
-            {retryingLive
-              ? (connectionMessage || 'Waking up cloud ML backend container on Render (this may take up to 45 seconds)...')
-              : 'Computing recommendations via machine learning models...'}
-          </p>
+          <p>Computing recommendations via machine learning models...</p>
         </div>
       ) : error ? (
         <div className="error-state">

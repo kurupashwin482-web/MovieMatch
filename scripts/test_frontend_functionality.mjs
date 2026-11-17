@@ -236,10 +236,10 @@ async function runTests() {
   }
   assert(genre400Caught, 'Genre recommender enforces minimum 5 ratings constraint and returns 400 error');
 
-  // 5. Fallback notice banner presence in RecommendationSection
+  // 5. Verify that warning banners are removed from visitor UI
   const recSectionSrc = fs.readFileSync(path.join(rootDir, 'frontend/src/components/RecommendationSection.jsx'), 'utf-8');
-  assert(recSectionSrc.includes('fallback-banner'), 'RecommendationSection contains fallback-banner element');
-  assert(recSectionSrc.includes('Connect to Live Backend'), 'RecommendationSection contains Connect to Live Backend retry action');
+  assert(!recSectionSrc.includes('className="fallback-banner"'), 'RecommendationSection does not render yellow fallback banner');
+  assert(!recSectionSrc.includes('className="connection-error-box"'), 'RecommendationSection does not render red connection notice');
 
   // TEST G: Clear ratings
   console.log('\n--- TEST G: Clear Ratings ---');
