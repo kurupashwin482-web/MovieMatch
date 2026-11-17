@@ -2,20 +2,22 @@
 
 **Course:** ES 335: Machine Learning (Undergraduate Course Project)  
 **Public Web Application:** [https://kurupashwin482-web.github.io/MovieMatch/](https://kurupashwin482-web.github.io/MovieMatch/)  
-**Live Backend API:** [https://moviematch-backend.onrender.com](https://moviematch-backend.onrender.com)  
+**Live Backend API:** [https://moviematch-backend.onrender.com](https://moviematch-backend.onrender.com)
 
 ---
 
 ## 1. Project Title & Overview
 
 **MovieMatch** is an end-to-end machine learning system and interactive web platform that investigates, evaluates, and deploys three distinct recommendation paradigms:
-1. **Bayesian Popularity-Based Recommender** (Non-personalized consensus baseline using IMDb shrinkage)
-2. **TF-IDF Content-Based Recommender** (High-dimensional plot semantic profile matching across 20,000 features)
-3. **Multi-Hot Genre Hybrid Recommender** (20-dimensional categorical taste matching blended with Bayesian movie quality)
+
+1. **Bayesian Popularity-Based Recommender** — Non-personalized consensus baseline using IMDb shrinkage.
+2. **TF-IDF Content-Based Recommender** — High-dimensional plot-based profile matching across 20,000 features.
+3. **Multi-Hot Genre Hybrid Recommender** — 20-dimensional categorical taste matching blended with Bayesian movie quality.
 
 The project bridges theoretical machine learning research with practical software engineering:
-- **Offline ML Research**: Four Jupyter notebooks document the complete data pipeline, mathematical modeling, parameter selection, and offline evaluation across ranking metrics (Precision@K, Recall@K, NDCG@K).
-- **Production Web Application**: A React Single Page Application (SPA) deployed to GitHub Pages and a stateless FastAPI backend deployed to Render. The platform offers **anonymous, zero-setup access**: visitors search catalogue movies, submit star ratings persisted in browser `localStorage`, and dynamically unlock personalized ML recommendations after rating at least five films—without requiring account registration, passwords, or personal data.
+
+- **Offline ML Research:** Four Jupyter notebooks document the complete data pipeline, mathematical modeling, parameter selection, and offline evaluation across ranking metrics (Precision@K, Recall@K, NDCG@K).
+- **Production Web Application:** A React Single Page Application (SPA) deployed to GitHub Pages and a stateless FastAPI backend deployed to Render. The platform offers **anonymous, zero-setup access**: visitors search catalogue movies, submit star ratings persisted in browser `localStorage`, and dynamically unlock personalized ML recommendations after rating at least five films — without requiring account registration, passwords, or personal data.
 
 ---
 
@@ -29,122 +31,174 @@ Modern media and streaming platforms face fundamental algorithmic challenges whe
 
 ### Mathematical Definition of the Recommendation Task
 
-Given a catalogue of movies $M = \{m_1, m_2, \ldots, m_N\}$ and a visitor $u$ who has rated a subset of movies, the user rating history is defined as:
+Given a catalogue of movies:
 
-$$
-R(u) = \{(m, r_{um}) \mid m \in M_u\}
-$$
+```text
+M = {m₁, m₂, ..., mₙ}
+```
+
+and a visitor `u` who has rated a subset of movies, the user's rating history is defined as:
+
+```text
+R(u) = {(m, rᵤₘ) | m ∈ Mᵤ}
+```
 
 where:
-- $M_u$ is the set of movies rated by user $u$.
-- $r_{um}$ is the rating given by user $u$ to movie $m$, where $r_{um} \in [0.5, 5.0]$.
+
+- `Mᵤ` is the set of movies rated by user `u`.
+- `rᵤₘ` is the rating given by user `u` to movie `m`, where `rᵤₘ ∈ [0.5, 5.0]`.
 
 The candidate movie set available for recommendation consists of all unrated movies:
 
-$$
-C(u) = M \setminus M_u
-$$
+```text
+C(u) = M \ Mᵤ
+```
 
-The Top-$K$ recommendation objective selects an ordered set of $K = 10$ unrated candidate movies that maximize the scoring function:
+The recommendation objective is to select the `K = 10` highest-scoring unrated movies.
 
-$$
-\operatorname{TopK}(u) = \underset{S \subseteq C(u), |S|=K}{\arg\max} \sum_{m \in S} S(u, m)
-$$
+```text
+TopK(u) = The K movies in C(u) with the highest values of S(u, m)
+```
 
-where $S(u, m)$ represents the scoring function specific to each recommendation method. The system calculates $S(u, m)$ for every candidate movie in $C(u)$, sorts them in descending order of score, and returns the 10 highest-scoring movies.
+Here, `S(u, m)` represents the scoring function specific to each recommendation method.
+
+The system calculates `S(u, m)` for every candidate movie in `C(u)`, sorts the candidates in descending order of score, and returns the 10 highest-scoring movies.
 
 ---
 
 ## 3. Recommendation Methods & Mathematical Formulations
 
-```
-┌────────────────────────────────────────────────────────────────────────────────────────┐
-│                                 MovieMatch Recommendation Framework                    │
-├──────────────────────────┬─────────────────────────────┬───────────────────────────────┤
-│ 1. Bayesian Popularity   │ 2. TF-IDF Content Profile   │ 3. Multi-Hot Genre Hybrid     │
-│ (IMDb Weighted Rating)   │ (20,000 Plot Text Features) │ (Taste & Quality Blend, α=0.5)│
-│                          │                             │                               │
-│  WR = (v/(v+m))R +       │  Pu = Σ w(r) · Vi           │  Pu = Σ max(0, r-3) · Gi      │
-│       (m/(v+m))C         │  sim = (Pu · Vm)/(||Pu||||Vm||)│  S = α G(u,m) + (1-α) Q(m) │
-│  - No ratings required   │  - Min 5 ratings required   │  - Min 5 ratings required     │
-│  - Cold-start baseline   │  - Specific plot tropes     │  - Best offline Recall/NDCG   │
-└──────────────────────────┴─────────────────────────────┴───────────────────────────────┘
+The project compares three recommendation approaches:
+
+```text
+┌────────────────────────────────────────────────────────────────────────────┐
+│                     MovieMatch Recommendation Framework                    │
+├──────────────────────────┬──────────────────────────┬──────────────────────┤
+│ 1. Bayesian Popularity   │ 2. TF-IDF Content        │ 3. Multi-Hot Genre   │
+│    Recommender           │    Recommender           │    Hybrid            │
+├──────────────────────────┼──────────────────────────┼──────────────────────┤
+│ IMDb Weighted Rating     │ 20,000 Plot Features     │ Taste & Quality      │
+│                          │                          │ Blend (α = 0.5)      │
+│ WR = (v/(v+m))R          │ Pᵤ = Σ w(rᵤᵢ) · Vᵢ       │ Pᵤ = Σ max(0,rᵤᵢ-3)Gᵢ│
+│    + (m/(v+m))C          │                          │                      │
+│                          │ Similarity =             │ S = αG(u,m)           │
+│ No ratings required      │ (Pᵤ · Vₘ)/               │   + (1-α)Q(m)         │
+│                          │ (||Pᵤ|| ||Vₘ||)          │                      │
+│ Cold-start baseline      │ Min. 5 ratings required  │ Min. 5 ratings       │
+└──────────────────────────┴──────────────────────────┴──────────────────────┘
 ```
 
 ### A. Popularity-Based Recommender (Bayesian Shrinkage Baseline)
-* **Notebook**: `Notebooks/02_popularity.ipynb`
-* **Artifact**: `dataset/processed/popularity_ranking.csv` (12,652 movies)
-* **Mathematical Formulation**:
-  To prevent obscure movies with a single 5.0-star rating from dominating top ranks, I implement the **IMDb Bayesian Weighted Rating formula**:
 
-$$
-\text{WR}(m) = \left(\frac{v}{v + m}\right) R + \left(\frac{m}{v + m}\right) C
-$$
+- **Notebook:** `Notebooks/02_popularity.ipynb`
+- **Artifact:** `dataset/processed/popularity_ranking.csv` (12,652 movies)
 
-  where:
-  - $v$: Number of user ratings for the movie (`rating_count`).
-  - $R$: Arithmetic mean rating of the movie (`avg_rating`).
-  - $m$: 70th percentile rating volume threshold ($m = 17.0$ in small sample, $m = 43.0$ in full dataset).
-  - $C$: Global mean rating across all rated catalogue movies ($C \approx 3.05$ / $3.52$).
-* **Shrinkage Intuition**: For movies with low review volume ($v \ll m$), the score is pulled *(shrunk)* toward the global prior mean $C$. As rating volume grows ($v \gg m$), the empirical mean $R$ dominates.
-* **Serving Rule**: Computes instantaneously with zero visitor ratings. Automatically filters out movies already rated by the visitor.
+**Mathematical Formulation**
+
+To prevent obscure movies with a single 5.0-star rating from dominating the rankings, the system implements the **IMDb Bayesian Weighted Rating formula**:
+
+```text
+WR(m) = [v / (v + m)] × R + [m / (v + m)] × C
+```
+
+Where:
+
+- `v`: Number of user ratings for the movie (`rating_count`).
+- `R`: Arithmetic mean rating of the movie (`avg_rating`).
+- `m`: 70th percentile rating-volume threshold (`m = 17.0` in the small sample and `m = 43.0` in the full dataset).
+- `C`: Global mean rating across all rated catalogue movies (`C ≈ 3.05` in the small sample and `C ≈ 3.52` in the full dataset).
+
+**Shrinkage Intuition:** For movies with a low number of ratings (`v << m`), the score is pulled towards the global prior mean `C`. As the rating count grows (`v >> m`), the movie's observed average rating `R` has a greater influence on the final score.
+
+**Serving Rule:** The model produces recommendations without requiring visitor ratings. It automatically filters out movies already rated by the visitor.
 
 ---
 
 ### B. TF-IDF Content-Based Recommender (Plot Semantic Profile)
-* **Notebook**: `Notebooks/03_tfidf_recommender.ipynb`
-* **Artifacts**: `Backend Artifacts/tfidf_matrix.pkl` (12,794 movies $\times$ 20,000 sparse matrix), `movie_id_to_index.pkl`, `tfidf_vectorizer.pkl`.
-* **Serving Rule**: Requires at least 5 distinct rated movies; excludes already-rated movies and movies without overviews.
 
-**1. Text Representation**
+- **Notebook:** `Notebooks/03_tfidf_recommender.ipynb`
+- **Artifacts:**
+  - `Backend Artifacts/tfidf_matrix.pkl` — A sparse matrix containing 12,794 movies and 20,000 features.
+  - `Backend Artifacts/movie_id_to_index.pkl`
+  - `Backend Artifacts/tfidf_vectorizer.pkl`
 
-Term Frequency-Inverse Document Frequency extracts 20,000 unigrams and bigrams from cleaned plot overviews:
+**Serving Rule:** Requires at least five distinct rated movies. It excludes already-rated movies and movies without overviews.
 
-$$
-\text{TF}(t, d) = \frac{f_{t,d}}{\sum_{t' \in d} f_{t', d}}, \quad \text{IDF}(t, D) = \ln\left(\frac{1 + |D|}{1 + |\{d \in D : t \in d\}|}\right) + 1
-$$
+#### 1. Text Representation
 
-$$
-\text{TF-IDF}(t, d, D) = \text{TF}(t, d) \times \text{IDF}(t, D)
-$$
+Term Frequency-Inverse Document Frequency (TF-IDF) extracts 20,000 unigrams and bigrams from cleaned movie plot overviews.
 
-**2. Dynamic User Taste Profile**
+The mathematical formulation is:
 
-The user preference profile is constructed as a weighted sum of the TF-IDF feature vectors of all movies rated by the user:
+```text
+TF(t, d) = Frequency of term t in document d
+           ------------------------------------
+           Total number of terms in document d
+```
 
-$$
-P_u = \sum_{i \in \text{Rated}(u)} w(r_{ui}) \cdot V_i
-$$
+```text
+IDF(t, D) = ln((1 + |D|) / (1 + df(t))) + 1
+```
 
-where:
-- $P_u$ is the user preference profile vector in the 20,000-dimensional vocabulary space.
-- $V_i$ is the TF-IDF feature vector of movie $i$.
-- $w(r_{ui})$ is the rating-weight function applied to user $u$'s rating for movie $i$.
+Where:
 
-The rating-weight function centers ratings around the neutral midpoint:
+- `t` is a term or word.
+- `d` is a movie overview.
+- `D` is the collection of all movie overviews.
+- `df(t)` is the number of documents containing term `t`.
 
-$$
-w(r) = \begin{cases} 0.1 & \text{if } r = 3.0 \\ r - 3.0 & \text{otherwise} \end{cases}
-$$
+The final TF-IDF weight is:
 
-How ratings affect vocabulary weights in the profile:
-- Positive ratings (above 3.0 stars) give positive weight to plot keywords (for example, a 5.0-star rating assigns a weight of +2.0).
-- Negative ratings (below 3.0 stars) give negative weight to plot keywords (for example, a 1.0-star rating assigns a weight of -2.0).
+```text
+TF-IDF(t, d, D) = TF(t, d) × IDF(t, D)
+```
+
+This gives greater importance to terms that are frequent in a particular movie overview but relatively uncommon across the entire collection.
+
+#### 2. Dynamic User Taste Profile
+
+The user's preference profile is constructed as a weighted sum of the TF-IDF feature vectors of all movies rated by that user:
+
+```text
+Pᵤ = Σ w(rᵤᵢ) × Vᵢ
+```
+
+Where:
+
+- `Pᵤ` is the user's preference profile in the 20,000-dimensional vocabulary space.
+- `Vᵢ` is the TF-IDF feature vector of movie `i`.
+- `w(rᵤᵢ)` is the rating-weight function applied to the user's rating for movie `i`.
+
+The rating-weight function centers ratings around the neutral midpoint of 3.0:
+
+```text
+             ┌  0.1       if r = 3.0
+w(r) =       │
+             └  r - 3.0   otherwise
+```
+
+**How ratings affect vocabulary weights:**
+
+- Positive ratings (above 3.0 stars) give positive weight to plot keywords. For example, a 5.0-star rating assigns a weight of +2.0.
+- Negative ratings (below 3.0 stars) give negative weight to plot keywords. For example, a 1.0-star rating assigns a weight of -2.0.
 - Neutral ratings (exactly 3.0 stars) provide a mild positive anchor with a weight of +0.1.
 
 **3. Cosine Similarity Scoring**
 
-The match between the user profile vector and each candidate movie vector is computed using cosine similarity:
+The system measures how closely each candidate movie matches the user's preference profile using cosine similarity.
 
-$$
-\operatorname{sim}(P_u, V_m) = \frac{P_u \cdot V_m}{\|P_u\| \|V_m\|}
-$$
+The similarity score is calculated as:
+
+> **Similarity(Pᵤ, Vₘ) = (Pᵤ · Vₘ) / (‖Pᵤ‖ × ‖Vₘ‖)**
 
 where:
-- $P_u$ is the user profile vector.
-- $V_m$ is the TF-IDF feature vector of candidate movie $m$.
-- $\|P_u\|$ and $\|V_m\|$ are the Euclidean norms of the vectors.
 
+- **Pᵤ** is the user's preference profile vector.
+- **Vₘ** is the TF-IDF feature vector of candidate movie *m*.
+- **Pᵤ · Vₘ** is the dot product of the two vectors.
+- **‖Pᵤ‖** and **‖Vₘ‖** are their respective Euclidean norms.
+
+A higher cosine similarity indicates that the candidate movie's plot description is more closely aligned with the user's rated-movie preferences.
 ---
 
 ### C. Genre-Based Hybrid Recommender (Taste & Quality Blend)
