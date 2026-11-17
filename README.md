@@ -40,7 +40,11 @@ where:
 - $M_u$ is the set of movies rated by user $u$.
 - $r_{um}$ is the rating given by user $u$ to movie $m$, where $r_{um} \in [0.5, 5.0]$.
 
-The goal is to generate an ordered list of $K = 10$ previously unrated candidate movies.
+The goal is to generate an ordered list of $K = 10$ previously unrated candidate movies from $C(u)$ that maximize the scoring function:
+
+$$
+\text{Top-}K(u) = \operatorname*{arg\,max}_{S \subseteq C(u),\, |S|=K} \sum_{m \in S} S(u, m)
+$$
 
 The set of candidate movies is:
 
@@ -48,9 +52,7 @@ $$
 C(u) = M \setminus M_u
 $$
 
-The recommendation system calculates a model-specific score $S(u,m)$ for every candidate movie. It sorts the candidates in descending order of their scores and returns the 10 highest-scoring movies.
-
-Here, $S(u,m)$ represents the scoring function specific to each recommendation method.
+where $S(u, m)$ represents the scoring function specific to each recommendation method. The system calculates $S(u, m)$ for every candidate movie, sorts the candidates in descending order of their scores, and returns the 10 highest-scoring movies.
 
 ---
 
@@ -77,7 +79,7 @@ Here, $S(u,m)$ represents the scoring function specific to each recommendation m
   To prevent obscure movies with a single 5.0-star rating from dominating top ranks, I implement the **IMDb Bayesian Weighted Rating formula**:
 
 $$
-WR(m) = \left(\frac{v}{v + m}\right) R + \left(\frac{m}{v + m}\right) C
+\text{WR}(m) = \left(\frac{v}{v + m}\right) R + \left(\frac{m}{v + m}\right) C
 $$
 
   where:
@@ -85,7 +87,7 @@ $$
   - $R$: Arithmetic mean rating of the movie (`avg_rating`).
   - $m$: 70th percentile rating volume threshold ($m = 17.0$ in small sample, $m = 43.0$ in full dataset).
   - $C$: Global mean rating across all rated catalogue movies ($C \approx 3.05$ / $3.52$).
-* **Shrinkage Intuition**: For movies with low review volume ($v \ll m$), the score is pulled ($shrunk$) toward the global prior mean $C$. As rating volume grows ($v \gg m$), the empirical mean $R$ dominates.
+* **Shrinkage Intuition**: For movies with low review volume ($v \ll m$), the score is pulled *(shrunk)* toward the global prior mean $C$. As rating volume grows ($v \gg m$), the empirical mean $R$ dominates.
 * **Serving Rule**: Computes instantaneously with zero visitor ratings. Automatically filters out movies already rated by the visitor.
 
 ---
@@ -130,53 +132,48 @@ $$
 ---
 
 ### C. Genre-Based Hybrid Recommender (Taste & Quality Blend)
+* **Notebook**: `Notebooks/04_Genre_Based_Movie_Recommendation_System.ipynb`
+* **Artifact**: `Backend Artifacts/genre_model.pkl` (12,262 movies $\times$ 20 genres, normalized quality scores $Q(m)$, and catalogue metadata).
+* **Mathematical Formulation**:
+  1. **Multi-Hot Binary Encoding**:
+     Each candidate film $m$ is represented by a 20-dimensional binary vector $G_m \in \{0, 1\}^{20}$, where $G_{m, g} = 1$ if movie $m$ is tagged with genre $g$, and $0$ otherwise.
 
-- **Notebook:** `Notebooks/04_Genre_Based_Movie_Recommendation_System.ipynb`
-- **Artifact:** `Backend Artifacts/genre_model.pkl` (12,262 movies × 20 genres, normalized quality scores, and catalogue metadata).
+  2. **Positive-Only User Taste Profile**:
+     The visitor's genre preference vector $P_u$ is aggregated using only favorable ratings ($r_{ui} > 3.0$):
 
-**1. Multi-Hot Binary Encoding**
+$$
+P_u = \sum_{i \in \text{Rated}(u)} \max(0, r_{ui} - 3.0) \cdot G_i
+$$
 
-Each movie is represented by a binary vector containing 20 positions, one for each genre. A value of 1 indicates that the movie belongs to that genre; 0 indicates that it does not.
+     where:
+     - $P_u$: Aggregated genre preference profile vector for visitor $u$.
+     - $r_{ui}$: Star rating assigned by visitor $u$ to movie $i$.
+     - $G_i$: 20-dimensional multi-hot genre indicator vector for movie $i$.
 
-**2. Positive-Only User Profile**
+     Ratings above 3.0 contribute linearly to the visitor's genre profile, while ratings of 3.0 or below contribute 0. This avoids assuming that disliking one specific film implies disliking an entire genre.
 
-The user's genre preference profile is calculated using only ratings above 3.
+  3. **Cosine Genre Similarity**:
+     The alignment between profile vector $P_u$ and candidate movie genre vector $G_m$ is computed using cosine similarity:
 
-**Formula:**
+$$
+G(u, m) = \frac{P_u \cdot G_m}{\|P_u\| \|G_m\|}
+$$
 
-Pᵤ = Σ max(0, rᵤᵢ − 3) × Gᵢ
+     A higher similarity score indicates a closer match between candidate film $m$ and the visitor's preferred genres.
 
-Here:
-- Pᵤ = User's genre preference profile.
-- rᵤᵢ = Rating given by user u to movie i.
-- Gᵢ = Genre vector of movie i.
+  4. **Hybrid Quality Score Integration**:
+     To prevent recommending low-quality or poorly received niche films, genre similarity is blended with the normalized Bayesian quality score $Q(m)$:
 
-Movies rated above 3 contribute to the user's genre preferences. Movies rated 3 or below do not contribute. This avoids assuming that disliking one movie means disliking its entire genre.
+$$
+S(u, m) = \alpha \cdot G(u, m) + (1 - \alpha) \cdot Q(m)
+$$
 
-**3. Cosine Genre Similarity**
+     where:
+     - $G(u, m)$: Cosine genre similarity between user $u$ and candidate movie $m$.
+     - $Q(m)$: Min-max normalized Bayesian weighted rating of movie $m$, $Q(m) \in [0, 1]$.
+     - $\alpha$: Hyperparameter weight, tuned to $\alpha = 0.5$ via validation grid search, balancing individual genre affinity and consensus film quality.
 
-The similarity between the user's genre profile and a candidate movie is calculated using cosine similarity.
-
-**Formula:**
-
-G(u, m) = (Pᵤ · Gₘ) / (‖Pᵤ‖ × ‖Gₘ‖)
-
-A higher similarity score indicates a stronger match between the candidate movie's genres and the user's preferences.
-
-**4. Hybrid Quality Score Integration**
-
-Genre similarity is combined with the normalized Bayesian movie quality score.
-
-**Formula:**
-
-S(u, m) = α × G(u, m) + (1 − α) × Q(m)
-
-Where:
-- G(u, m) = Genre similarity between the user and movie.
-- Q(m) = Normalized Bayesian quality score of the movie.
-- α = 0.5, giving equal importance to personal genre preferences and overall movie quality.
-
-**Serving Rule:** Requires at least 5 distinct rated movies and returns the top 10 highest-ranked movies that the user has not already rated.
+* **Serving Rule**: Requires at least **5 distinct rated movies**; excludes already-rated movies.
 ---
 
 ## 4. Dataset Description & Sources
@@ -367,7 +364,7 @@ The table below summarizes the macro-averaged evaluation results obtained from t
 ### Technical Interpretation of Experimental Results
 1. **The Power of Dense Categorical Representations**: The Multi-Hot Genre model dramatically outperforms pure TF-IDF across all ranking metrics (**Precision@10 of 16.98% vs 2.04%**). Because genres are curated and universal across all catalogue movies, the user profile avoids the vocabulary mismatch that plagues free-text plot summaries.
 2. **The Necessity of Quality Blending ($\alpha = 0.5$)**: In validation tuning, pure genre matching without quality ($\alpha = 1.0$) achieved a Recall@10 of only $0.0069$. Blending genre similarity with normalized Bayesian quality scores ($\alpha = 0.5$) increased Recall@10 by **7.5x** (to $0.0520$), confirming that users evaluate recommendations based on both topical relevance and perceived cinematic quality.
-3. **Offline Recommender Evaluation Realities**: In offline evaluation, any unrated test movie is scored as non-relevant ($0$), artificially depressing absolute precision and recall figures. However, relative comparisons remain rigorous and statistically robust.
+3. **Offline Recommender Evaluation Realities**: In offline evaluation, any unrated test movie is scored as non-relevant (score of 0), artificially depressing absolute precision and recall figures. However, relative comparisons remain rigorous and statistically robust.
 
 ---
 
@@ -377,7 +374,7 @@ The MovieMatch web application allows evaluators to interact with the models dir
 
 1. **Explore & Search Catalogue**: Browse 2,524 catalogue movies across 106 pages, search by title with 250ms debouncing (e.g. *Inception*, *The Dark Knight*, *Toy Story*), and filter by 20 distinct genres.
 2. **Rate Movies (Anonymous LocalStorage)**: Rate movies using interactive 0.5–5.0 star controls. Ratings persist across page refreshes under browser `localStorage` (`moviematch_ratings_v1`). No account, email, or password required.
-3. **Progress Tracking**: A dynamic progress bar tracks rated movies ($X / 5$ rated).
+3. **Progress Tracking**: A dynamic progress bar tracks rated movies (progressing from 0 to 5 rated films to unlock personalized models).
 4. **Compare All Three Models**:
    - **Popularity-Based Tab**: Available immediately upon landing (excludes movies you have rated).
    - **TF-IDF Content Tab**: Unlocks after 5 ratings; dynamically constructs a 20,000-dimensional vector profile.
