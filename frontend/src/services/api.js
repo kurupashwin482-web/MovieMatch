@@ -178,9 +178,9 @@ class ApiService {
   }
 
   // Recommendation Endpoints (Stateless Anonymous Inference)
-  async getPopularityRecommendations(ratedMovieIds = [], k = 10) {
+  async getPopularityRecommendations(ratedMovieIds = [], k = 10, timeoutMs = 4500) {
     try {
-      return await this.request(
+      const data = await this.request(
         '/recommendations/popularity',
         {
           method: 'POST',
@@ -189,14 +189,23 @@ class ApiService {
             k,
           }),
         },
-        4000
+        timeoutMs
       );
+      return {
+        ...data,
+        is_fallback: false,
+      };
     } catch (err) {
+      if (err.status === 400 || err.status === 422) {
+        throw err;
+      }
       // Fallback popularity ranking
       const ratedSet = new Set((ratedMovieIds || []).map(Number));
       const popList = (await loadStaticPopularity()) || (await loadStaticCatalogue());
       const filtered = popList.filter((m) => !ratedSet.has(m.tmdbId)).slice(0, k);
       return {
+        algorithm: 'popularity',
+        is_fallback: true,
         movies: filtered.map((m) => ({
           ...m,
           score_type: 'popularity_rank',
@@ -205,9 +214,15 @@ class ApiService {
     }
   }
 
-  async getTfidfRecommendations(ratingsDict, k = 10) {
+  async getTfidfRecommendations(ratingsDict, k = 10, timeoutMs = 6000) {
+    const ratingsCount = Object.keys(ratingsDict || {}).length;
+    if (ratingsCount < 5) {
+      const err = new Error(`At least 5 movie ratings are required for personalized TF-IDF recommendations. Currently provided: ${ratingsCount}.`);
+      err.status = 400;
+      throw err;
+    }
     try {
-      return await this.request(
+      const data = await this.request(
         '/recommendations/tfidf',
         {
           method: 'POST',
@@ -216,9 +231,16 @@ class ApiService {
             k,
           }),
         },
-        6000
+        timeoutMs
       );
+      return {
+        ...data,
+        is_fallback: false,
+      };
     } catch (err) {
+      if (err.status === 400 || err.status === 422) {
+        throw err;
+      }
       // Client-side fallback content-based matching
       const catalogue = await loadStaticCatalogue();
       const ratedIds = new Set(Object.keys(ratingsDict).map(Number));
@@ -266,13 +288,23 @@ class ApiService {
         });
 
       scored.sort((a, b) => (b.score || 0) - (a.score || 0));
-      return { movies: scored.slice(0, k) };
+      return {
+        algorithm: 'tfidf',
+        is_fallback: true,
+        movies: scored.slice(0, k),
+      };
     }
   }
 
-  async getGenreRecommendations(ratingsDict, k = 10) {
+  async getGenreRecommendations(ratingsDict, k = 10, timeoutMs = 6000) {
+    const ratingsCount = Object.keys(ratingsDict || {}).length;
+    if (ratingsCount < 5) {
+      const err = new Error(`At least 5 movie ratings are required for personalized Genre recommendations. Currently provided: ${ratingsCount}.`);
+      err.status = 400;
+      throw err;
+    }
     try {
-      return await this.request(
+      const data = await this.request(
         '/recommendations/genre',
         {
           method: 'POST',
@@ -281,9 +313,16 @@ class ApiService {
             k,
           }),
         },
-        6000
+        timeoutMs
       );
+      return {
+        ...data,
+        is_fallback: false,
+      };
     } catch (err) {
+      if (err.status === 400 || err.status === 422) {
+        throw err;
+      }
       // Client-side genre preference profile matching
       const catalogue = await loadStaticCatalogue();
       const ratedIds = new Set(Object.keys(ratingsDict).map(Number));
@@ -328,7 +367,11 @@ class ApiService {
         });
 
       scored.sort((a, b) => (b.score || 0) - (a.score || 0));
-      return { movies: scored.slice(0, k) };
+      return {
+        algorithm: 'genre',
+        is_fallback: true,
+        movies: scored.slice(0, k),
+      };
     }
   }
 

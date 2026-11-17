@@ -11,43 +11,54 @@ export const RecommendationSection = ({ onExploreClick, onRateMovie }) => {
   const [movies, setMovies] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [isFallback, setIsFallback] = useState(false);
+  const [retryingLive, setRetryingLive] = useState(false);
 
   // Track request sequence to prevent tab-switching race conditions
   const requestIdRef = useRef(0);
 
-  const fetchRecommendations = useCallback(async (tab, kVal = topK) => {
+  const fetchRecommendations = useCallback(async (tab, kVal = topK, isRetry = false) => {
     const currentId = ++requestIdRef.current;
     setLoading(true);
     setError(null);
+    if (isRetry) {
+      setRetryingLive(true);
+    }
 
     const targetK = Math.max(5, Math.min(20, Number(kVal) || 10));
+    const timeoutMs = isRetry ? 45000 : undefined;
 
     try {
       let data;
       if (tab === 'popularity') {
         const ratedIds = getRatedMovieIds();
-        data = await api.getPopularityRecommendations(ratedIds, targetK);
+        data = await api.getPopularityRecommendations(ratedIds, targetK, timeoutMs);
       } else if (tab === 'tfidf') {
         const payload = getRatingsPayload();
-        data = await api.getTfidfRecommendations(payload, targetK);
+        data = await api.getTfidfRecommendations(payload, targetK, timeoutMs);
       } else if (tab === 'genre') {
         const payload = getRatingsPayload();
-        data = await api.getGenreRecommendations(payload, targetK);
+        data = await api.getGenreRecommendations(payload, targetK, timeoutMs);
       }
 
       if (currentId !== requestIdRef.current) return;
       setMovies(data?.movies || []);
+      setIsFallback(Boolean(data?.is_fallback));
     } catch (err) {
       if (currentId !== requestIdRef.current) return;
       if (err.status === 400 && (tab === 'tfidf' || tab === 'genre')) {
         setError(err.message || 'At least 5 ratings required for personalized recommendations.');
+        setMovies([]);
       } else {
-        setError(err.message || 'Failed to load recommendations. Please try again.');
+        if (!isRetry) {
+          setError(err.message || 'Failed to load recommendations. Please try again.');
+          setMovies([]);
+        }
       }
-      setMovies([]);
     } finally {
       if (currentId === requestIdRef.current) {
         setLoading(false);
+        setRetryingLive(false);
       }
     }
   }, [getRatingsPayload, getRatedMovieIds, topK]);
@@ -171,6 +182,28 @@ export const RecommendationSection = ({ onExploreClick, onRateMovie }) => {
         )}
       </div>
 
+      {/* Fallback notification when cloud ML backend is asleep or spinning up */}
+      {isFallback && !isTabLocked && !loading && (
+        <div className="fallback-banner">
+          <div className="fallback-banner-content">
+            <span className="fallback-pill">Offline / Cold-Start Fallback</span>
+            <span className="fallback-text">
+              The live cloud ML backend (Render free tier) is currently asleep or spinning up. Displaying high-speed client-side recommendations.
+            </span>
+          </div>
+          <button
+            type="button"
+            className="btn-retry-live"
+            onClick={() => fetchRecommendations(activeTab, topK, true)}
+            disabled={loading || retryingLive}
+            title="Attempt to connect to the live FastAPI backend on Render"
+          >
+            <RefreshCw size={14} className={retryingLive ? 'animate-spin' : ''} />
+            <span>{retryingLive ? 'Connecting (~30s)...' : 'Connect to Live Backend'}</span>
+          </button>
+        </div>
+      )}
+
       {/* Locked State for TF-IDF / Genre if ratings < 5 */}
       {isTabLocked ? (
         <div className="locked-view-card">
@@ -200,7 +233,11 @@ export const RecommendationSection = ({ onExploreClick, onRateMovie }) => {
       ) : loading ? (
         <div className="loading-state">
           <div className="spinner" />
-          <p>Computing recommendations via machine learning models...</p>
+          <p>
+            {retryingLive
+              ? 'Waking up cloud ML backend container on Render (this may take up to 45 seconds)...'
+              : 'Computing recommendations via machine learning models...'}
+          </p>
         </div>
       ) : error ? (
         <div className="error-state">

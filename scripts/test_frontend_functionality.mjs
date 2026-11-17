@@ -201,20 +201,45 @@ async function runTests() {
   // 1. Popularity recommendation (works without ratings and excludes rated)
   const popRec = await api.getPopularityRecommendations(ratedIds, 10);
   assert(popRec.movies.length === 10, `Popularity recommendations returned 10 movies`);
+  assert(popRec.is_fallback === true, `Popularity fallback clearly flags is_fallback: true`);
   const anyRatedInPop = popRec.movies.some(m => ratedIds.includes(m.tmdbId));
   assert(!anyRatedInPop, `Popularity recommendations successfully exclude user's rated movies`);
 
   // 2. Genre recommendations
   const genreRec = await api.getGenreRecommendations(payload, 10);
   assert(genreRec.movies.length === 10, `Genre recommendations returned 10 movies`);
+  assert(genreRec.is_fallback === true, `Genre fallback clearly flags is_fallback: true`);
   const genreFirst = genreRec.movies[0];
   assert(genreFirst && genreFirst.score !== undefined, `Genre recommendation contains similarity score (${genreFirst.score})`);
 
   // 3. TF-IDF recommendations
   const tfidfRec = await api.getTfidfRecommendations(payload, 10);
   assert(tfidfRec.movies.length === 10, `TF-IDF recommendations returned 10 movies`);
+  assert(tfidfRec.is_fallback === true, `TF-IDF fallback clearly flags is_fallback: true`);
   const tfidfFirst = tfidfRec.movies[0];
   assert(tfidfFirst && tfidfFirst.score !== undefined, `TF-IDF recommendation contains match score (${tfidfFirst.score})`);
+
+  // 4. Strict 5-rating enforcement on personalized recommendations
+  let tfidf400Caught = false;
+  try {
+    await api.getTfidfRecommendations({ 27205: 5.0, 49026: 4.5 }, 10);
+  } catch (err) {
+    if (err.status === 400) tfidf400Caught = true;
+  }
+  assert(tfidf400Caught, 'TF-IDF enforces minimum 5 ratings constraint and returns 400 error');
+
+  let genre400Caught = false;
+  try {
+    await api.getGenreRecommendations({ 27205: 5.0, 49026: 4.5 }, 10);
+  } catch (err) {
+    if (err.status === 400) genre400Caught = true;
+  }
+  assert(genre400Caught, 'Genre recommender enforces minimum 5 ratings constraint and returns 400 error');
+
+  // 5. Fallback notice banner presence in RecommendationSection
+  const recSectionSrc = fs.readFileSync(path.join(rootDir, 'frontend/src/components/RecommendationSection.jsx'), 'utf-8');
+  assert(recSectionSrc.includes('fallback-banner'), 'RecommendationSection contains fallback-banner element');
+  assert(recSectionSrc.includes('Connect to Live Backend'), 'RecommendationSection contains Connect to Live Backend retry action');
 
   // TEST G: Clear ratings
   console.log('\n--- TEST G: Clear Ratings ---');
