@@ -493,7 +493,7 @@ All four notebooks are pre-executed with complete cell outputs and can be re-exe
 2. **Cold-Start Constraint:** Personalized models (TF-IDF and Genre) require at least 5 distinct movie ratings to construct a meaningful user profile.
 3. **Vocabulary Sparsity in Text:** TF-IDF cannot recognize semantic synonyms (e.g., "astronaut" vs. "cosmonaut") without dense contextual embeddings.
 4. **Coarse Genre Categorization:** With only 20 broad genres, the genre recommender cannot distinguish sub-genres (e.g., Psychological Thriller vs. Slasher Horror).
-5. **Movie Image Availability:** Not all movies have available poster images in the catalogue or from the external image source. As a result, some movie cards may display a placeholder instead of a poster. This is a limitation of image availability and does not affect the recommendation algorithms or their ranking scores.
+5. **Movie Image Availability & Poster Retrieval:** While historic 2017 TMDB image URLs frequently become invalid due to CDN re-hashing, MovieMatch implements identifier-based poster retrieval using verified TMDB IDs to resolve and cache current, high-resolution poster paths for catalogue and recommendation movies. For movies where no verified poster can be retrieved from external sources, a clean, neutral fallback card is displayed. Poster availability is an interface enhancement and does not alter the underlying recommendation algorithms or ranking scores.
 6. **Render Free-Tier Latency:** Render free instances sleep after 15 minutes of inactivity; the initial wake-up request may take approximately 50 seconds.
 ---
 

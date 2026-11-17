@@ -67,6 +67,24 @@ class MovieCatalogue:
             except Exception as e:
                 logger.warning(f"Could not load posters from raw metadata: {e}")
 
+        # Overlay verified poster mappings if available
+        verified_path = ARTIFACTS_DIR / "verified_posters.json"
+        if not verified_path.exists():
+            verified_path = ARTIFACTS_DIR.parent / "frontend" / "public" / "data" / "verified_posters.json"
+        if verified_path.exists():
+            try:
+                with open(verified_path) as vf:
+                    v_posters = json.load(vf)
+                for k, v in v_posters.items():
+                    if v and "image.tmdb.org/t/p/" in v:
+                        rel = "/" + v.split("image.tmdb.org/t/p/")[-1].split("/")[-1]
+                        self.poster_map[int(k)] = rel
+                    elif v:
+                        self.poster_map[int(k)] = str(v)
+                logger.info(f"Overlaid {len(v_posters)} verified posters.")
+            except Exception as e:
+                logger.warning(f"Could not load verified posters: {e}")
+
         # Ensure tmdbId is integer
         df["tmdbId"] = df["tmdbId"].astype(int)
         df["genres_list"] = df["genres"].apply(_parse_genres)

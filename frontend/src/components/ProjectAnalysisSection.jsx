@@ -18,6 +18,7 @@ import {
   GitBranch,
   Terminal,
 } from 'lucide-react';
+import { MathEquation } from './MathEquation';
 
 const REPO_URL = 'https://github.com/kurupashwin482-web/MovieMatch';
 
@@ -194,18 +195,21 @@ export const ProjectAnalysisSection = () => {
               <div className="content-card">
                 <h3 className="card-subtitle">Mathematical Definition of the Prediction Task</h3>
                 <p>
-                  Given a candidate catalogue of movies <span className="math-code">M = &#123;m₁, m₂, ..., m_N&#125;</span> and an active user{' '}
-                  <span className="math-code">u</span> who has submitted ratings for a subset <span className="math-code">R_u = &#123;(m, r_um) | r_um &isin; [0.5, 5.0]&#125;</span>:
+                  Given a candidate catalogue of films <MathEquation display={false} math="\mathcal{M} = \{m_1, m_2, \dots, m_N\}" /> and an active user{' '}
+                  <MathEquation display={false} math="u" /> who has submitted ratings for an observed subset{' '}
+                  <MathEquation display={false} math="\mathcal{R}_u = \{(m, r_{um}) \mid r_{um} \in [0.5, 5.0]\}" />:
                 </p>
                 <div className="formula-block">
                   <span className="formula-label">Top-K Selection:</span>
-                  <div className="formula-latex">
-                    Top-K(u) = argmax<sub>m &isin; M \ Rated(u)</sub><sup>(K)</sup> S(u, m)
-                  </div>
+                  <MathEquation
+                    display={true}
+                    math="\operatorname*{Top-K}(u) = \operatorname*{argmax}_{m \in \mathcal{M} \setminus \text{Rated}(u)}^{(K)} S(u, m)"
+                    ariaLabel="Top-K Selection Formula"
+                  />
                 </div>
                 <p className="caption-text">
-                  Where <span className="math-code">S(u, m)</span> represents the paradigm-specific scoring function for movie <span className="math-code">m</span>,
-                  strictly excluding all films the visitor has already evaluated.
+                  Where <MathEquation display={false} math="S(u, m)" /> represents the paradigm-specific ranking score for candidate film <MathEquation display={false} math="m" />,
+                  strictly excluding all films the visitor has already evaluated (<MathEquation display={false} math="m \notin \text{Rated}(u)" />).
                 </p>
               </div>
             </div>
@@ -625,20 +629,22 @@ export const ProjectAnalysisSection = () => {
                     It uses Bayesian shrinkage to pull low-review items toward the global prior mean rating.
                   </p>
                   <div className="formula-box">
-                    <strong>IMDb Weighted Rating Formula:</strong>
-                    <div className="formula-latex">
-                      WR(m) = [ v / (v + m) ] &times; R + [ m / (v + m) ] &times; C
-                    </div>
+                    <span className="formula-title">IMDb Bayesian Weighted Rating Formula:</span>
+                    <MathEquation
+                      display={true}
+                      math="\text{WR}(m) = \left( \frac{v}{v + m} \right) \cdot R + \left( \frac{m}{v + m} \right) \cdot C"
+                      ariaLabel="IMDb Bayesian Weighted Rating Formula"
+                    />
                     <ul className="formula-vars">
-                      <li><strong>v:</strong> Review count for the movie (<code>rating_count</code>).</li>
-                      <li><strong>R:</strong> Arithmetic mean rating of the movie (<code>avg_rating</code>).</li>
-                      <li><strong>m:</strong> 70th percentile review threshold (<span className="math-code">m = 17.0</span> small, <span className="math-code">43.0</span> full).</li>
-                      <li><strong>C:</strong> Global mean rating across all catalogue films (<span className="math-code">C &approx; 3.05</span> small, <span className="math-code">3.52</span> full).</li>
+                      <li><strong>v:</strong> Review count for candidate movie <MathEquation display={false} math="m" /> (<code>rating_count</code>).</li>
+                      <li><strong>R:</strong> Arithmetic mean rating of movie <MathEquation display={false} math="m" /> (<code>avg_rating</code>).</li>
+                      <li><strong>m:</strong> 70th percentile review threshold (<MathEquation display={false} math="m = 17.0" /> in sample, <MathEquation display={false} math="m = 43.0" /> in full catalogue).</li>
+                      <li><strong>C:</strong> Global prior mean rating across all catalogue films (<MathEquation display={false} math="C \approx 3.05" /> in sample, <MathEquation display={false} math="C \approx 3.52" /> in full catalogue).</li>
                     </ul>
                   </div>
                   <p className="model-takeaway">
-                    <strong>Shrinkage Intuition:</strong> For movies with low review volume (<span className="math-code">v &ll; m</span>), the score is pulled toward the catalogue average <span className="math-code">C</span>.
-                    As rating count grows (<span className="math-code">v &gg; m</span>), the movie's actual average rating <span className="math-code">R</span> dominates.
+                    <strong>Shrinkage Intuition:</strong> For movies with low review volume (<MathEquation display={false} math="v \ll m" />), the score shrinks toward the catalogue prior mean <MathEquation display={false} math="C" />.
+                    As rating count grows (<MathEquation display={false} math="v \gg m" />), the movie's observed mean rating <MathEquation display={false} math="R" /> dominates.
                   </p>
                 </div>
               </div>
@@ -655,20 +661,28 @@ export const ProjectAnalysisSection = () => {
                     scoring unrated films using cosine similarity against the user's preference vector.
                   </p>
                   <div className="formula-box">
-                    <strong>Signed Linear User Profile & Cosine Similarity:</strong>
-                    <div className="formula-latex">
-                      P<sub>u</sub> = &sum;<sub>i &isin; Rated(u)</sub> w(r<sub>ui</sub>) &times; V<sub>i</sub>
-                    </div>
-                    <div className="formula-sub">
-                      where w(r) = 0.1 if r = 3.0, otherwise (r - 3.0)
-                    </div>
-                    <div className="formula-latex mt-2">
-                      sim(P<sub>u</sub>, V<sub>m</sub>) = (P<sub>u</sub> &bull; V<sub>m</sub>) / ( ||P<sub>u</sub>|| ||V<sub>m</sub>|| )
-                    </div>
+                    <span className="formula-title">Signed Linear User Preference Profile:</span>
+                    <MathEquation
+                      display={true}
+                      math="\vec{p}_u = \sum_{i \in \text{Rated}(u)} w(r_{ui}) \cdot \vec{v}_i"
+                      ariaLabel="Signed Linear User Profile"
+                    />
+                    <span className="formula-title mt-2">Rating Centring Weight Function:</span>
+                    <MathEquation
+                      display={true}
+                      math="w(r) = \begin{cases} 0.1, & \text{if } r = 3.0 \\ r - 3.0, & \text{otherwise} \end{cases}"
+                      ariaLabel="Rating Weight Function"
+                    />
+                    <span className="formula-title mt-2">Cosine Similarity Scoring:</span>
+                    <MathEquation
+                      display={true}
+                      math="\operatorname{sim}(\vec{p}_u, \vec{v}_m) = \frac{\vec{p}_u \cdot \vec{v}_m}{\|\vec{p}_u\|_2 \, \|\vec{v}_m\|_2}"
+                      ariaLabel="TF-IDF Cosine Similarity"
+                    />
                   </div>
                   <p className="model-takeaway">
                     <strong>Hyperparameters:</strong> 20,000 max features, unigrams + bigrams (<code>ngram_range=(1, 2)</code>),
-                    English stopword removal, <code>min_df=2</code>. High ratings (&gt; 3) amplify keywords; low ratings (&lt; 3) penalize them.
+                    English stopword removal, <code>min_df=2</code>. High ratings (&gt; 3) amplify positive narrative keywords; low ratings (&lt; 3) penalize them.
                   </p>
                 </div>
               </div>
@@ -685,17 +699,22 @@ export const ProjectAnalysisSection = () => {
                     blending user genre affinity with consensus Bayesian quality scores.
                   </p>
                   <div className="formula-box">
-                    <strong>Positive-Only Profile & Quality Blending:</strong>
-                    <div className="formula-latex">
-                      P<sub>u</sub> = &sum;<sub>i &isin; Rated(u)</sub> max(0, r<sub>ui</sub> - 3.0) &times; G<sub>i</sub>
-                    </div>
-                    <div className="formula-latex mt-2">
-                      S(u, m) = &alpha; &times; G(u, m) + (1 - &alpha;) &times; Q(m)
-                    </div>
+                    <span className="formula-title">Positive-Only Genre Preference Profile:</span>
+                    <MathEquation
+                      display={true}
+                      math="\vec{g}_u = \sum_{i \in \text{Rated}(u)} \max(0, \, r_{ui} - 3.0) \cdot \vec{g}_i"
+                      ariaLabel="Positive-Only Genre Preference Profile"
+                    />
+                    <span className="formula-title mt-2">Hybrid Quality Score Formula:</span>
+                    <MathEquation
+                      display={true}
+                      math="S_{\text{hybrid}}(u, m) = \alpha \cdot \operatorname{sim}_{\text{genre}}(\vec{g}_u, \vec{g}_m) + (1 - \alpha) \cdot Q(m)"
+                      ariaLabel="Hybrid Quality Score Formula"
+                    />
                     <ul className="formula-vars">
-                      <li><strong>G(u, m):</strong> Cosine similarity between user genre profile and movie genre vector.</li>
-                      <li><strong>Q(m):</strong> Min-max normalized Bayesian quality score in range [0, 1].</li>
-                      <li><strong>&alpha; = 0.5:</strong> Optimal parameter providing equal 50/50 balance between taste and cinematic quality.</li>
+                      <li><MathEquation display={false} math="\operatorname{sim}_{\text{genre}}(\vec{g}_u, \vec{g}_m) = \frac{\vec{g}_u \cdot \vec{g}_m}{\|\vec{g}_u\|_2 \, \|\vec{g}_m\|_2}" />: Cosine similarity between user genre profile and candidate film vector.</li>
+                      <li><strong>Q(m):</strong> Min-max normalized Bayesian quality score in range <MathEquation display={false} math="[0, 1]" />.</li>
+                      <li><MathEquation display={false} math="\alpha = 0.50" />: Optimal parameter providing equal 50/50 balance between taste and cinematic quality.</li>
                     </ul>
                   </div>
                   <p className="model-takeaway">
@@ -746,23 +765,35 @@ export const ProjectAnalysisSection = () => {
               <div className="content-card">
                 <h3 className="card-subtitle">Ground Truth & Ranking Metrics (Cutoff K = 10)</h3>
                 <p>
-                  A test movie was classified as a true hit ("relevant") if the user rated it <span className="math-code">r &ge; 3.5</span> stars:
+                  A test movie was classified as an observed positive hit ("relevant") if the user rated it <MathEquation display={false} math="r \ge 3.5" /> stars:
                 </p>
                 <div className="metric-definitions-box">
                   <div className="metric-def">
                     <strong>Precision@10:</strong>
-                    <span>|Recommended<sub>K</sub> &cap; Relevant| / 10</span>
-                    <span className="metric-sub">Fraction of top-10 recommended movies that the user liked.</span>
+                    <MathEquation
+                      display={true}
+                      math="\operatorname{Precision}@K(u) = \frac{|\operatorname{Top-K}(u) \cap \text{Relevant}_u|}{K}"
+                      ariaLabel="Precision at K"
+                    />
+                    <span className="metric-sub">Fraction of top-10 recommended movies that the user evaluated as relevant.</span>
                   </div>
                   <div className="metric-def">
                     <strong>Recall@10:</strong>
-                    <span>|Recommended<sub>K</sub> &cap; Relevant| / |Relevant|</span>
-                    <span className="metric-sub">Fraction of all held-out liked movies that were successfully retrieved.</span>
+                    <MathEquation
+                      display={true}
+                      math="\operatorname{Recall}@K(u) = \frac{|\operatorname{Top-K}(u) \cap \text{Relevant}_u|}{|\text{Relevant}_u|}"
+                      ariaLabel="Recall at K"
+                    />
+                    <span className="metric-sub">Fraction of all held-out liked movies that were successfully retrieved in the top 10.</span>
                   </div>
                   <div className="metric-def">
                     <strong>NDCG@10:</strong>
-                    <span>DCG@10 / IDCG@10</span>
-                    <span className="metric-sub">Normalized Discounted Cumulative Gain, weighting hits by logarithmic position decay: 1 / log₂(rank + 1).</span>
+                    <MathEquation
+                      display={true}
+                      math="\operatorname{NDCG}@K(u) = \frac{\operatorname{DCG}@K(u)}{\operatorname{IDCG}@K(u)}, \quad \operatorname{DCG}@K(u) = \sum_{i=1}^K \frac{2^{\text{rel}_i} - 1}{\log_2(i + 1)}"
+                      ariaLabel="NDCG at K"
+                    />
+                    <span className="metric-sub">Normalized Discounted Cumulative Gain, weighting true hits by logarithmic position discount.</span>
                   </div>
                 </div>
               </div>
@@ -1010,17 +1041,20 @@ export const ProjectAnalysisSection = () => {
             </div>
 
             <div className="content-card mt-4">
-              <h3 className="card-subtitle">Understanding Offline Evaluation Sparsity (82.7% Zero Recall)</h3>
+              <h3 className="card-subtitle">Offline Evaluation Sparsity Analysis (82.7% Zero-Recall Rate)</h3>
               <p>
-                In offline recommender evaluation across 4,574 active users, <strong>82.71% of users achieved zero recall at K = 10</strong>.
-                For an academic viva, it is essential to understand why this occurs:
+                In the offline evaluation across 4,574 active users, <strong>82.71% of test users received zero recall at K = 10</strong>.
+                This result reflects the sparsity inherent in offline recommendation evaluation:
               </p>
               <ul className="bullet-list">
                 <li>
-                  <strong>The "Unobserved Positives" Reality:</strong> In offline evaluation, any unrated candidate is counted as a failure (score 0), even if the visitor would have loved it.
+                  <strong>Unobserved Positives in Ground Truth:</strong> Offline evaluation treats any candidate movie without a recorded test interaction as non-relevant (score 0). In practice, an unrated film may be highly relevant to the user, but because no historical rating exists in the test split, retrieving that film is counted as a retrieval failure.
                 </li>
                 <li>
-                  <strong>10 Items vs. 12,794 Candidates:</strong> Recommending only 10 items out of nearly 13,000 candidates makes predicting the exact few movies an offline user happened to rate statistically challenging.
+                  <strong>High Catalogue Cardinality Relative to Recommendation Cutoff:</strong> The evaluation requires selecting exactly 10 items from 12,794 candidates (<MathEquation display={false} math="K = 10" /> vs. 12,794). Because users in the held-out test split typically rated only 5 to 15 films, predicting those exact specific items out of thousands of candidates without pre-filtering produces low raw recall.
+                </li>
+                <li>
+                  <strong>Role of Quality Blending:</strong> While absolute offline recall numbers are constrained by matrix sparsity (&gt; 99.8%), the comparative rankings remain informative. As shown in the ablation experiments, incorporating Bayesian quality weighting produces a 7.5&times; improvement in Recall@10 over unweighted genre matching.
                 </li>
               </ul>
             </div>
@@ -1045,34 +1079,34 @@ export const ProjectAnalysisSection = () => {
           <div className="section-content-body">
             <div className="grid-two-col">
               <div className="content-card">
-                <h3 className="card-subtitle">Dataset Limitations</h3>
+                <h3 className="card-subtitle">Dataset Constraints</h3>
                 <ul className="bullet-list">
                   <li>
-                    <strong>Temporal Catalogue Scope:</strong> Restricted to 12,794 films released between 2010 and 2017 with valid TMDB mappings. Pre-2010 classics and post-2023 releases are absent.
+                    <strong>Temporal Scope:</strong> The dataset is restricted to films released between 2010 and 2017 with verified metadata mappings. Pre-2010 titles and recent releases are not part of the candidate catalogue.
                   </li>
                   <li>
-                    <strong>Overview Text Length:</strong> Plot overviews are short synopses (typically 30–60 words), limiting the depth of thematic extraction.
+                    <strong>Synopsis Depth:</strong> Plot overviews are concise synopses (typically 30–60 words), which limits the extent of thematic and narrative extraction.
                   </li>
                   <li>
-                    <strong>Rating Distribution Imbalance:</strong> Active users in MovieLens skew toward popular Hollywood releases, creating an intrinsic evaluation bias toward blockbuster films.
+                    <strong>Interaction Skew:</strong> Ratings skew toward widely distributed studio releases, introducing an evaluation tendency toward mainstream films.
                   </li>
                 </ul>
               </div>
 
               <div className="content-card">
-                <h3 className="card-subtitle">Algorithmic Limitations</h3>
+                <h3 className="card-subtitle">Algorithmic Constraints</h3>
                 <ul className="bullet-list">
                   <li>
-                    <strong>Absence of Collaborative Latent Factors:</strong> Neither TF-IDF nor Genre models leverage cross-user matrix factorization (e.g. SVD/ALS).
+                    <strong>Absence of Collaborative Latent Factors:</strong> The current models rely on content and genre features rather than cross-user collaborative filtering or matrix factorization (such as SVD or ALS).
                   </li>
                   <li>
-                    <strong>Synonymy & Polysemy Mismatch:</strong> TF-IDF cannot recognize that "cop" and "police officer" refer to the same concept without dense sentence embeddings.
+                    <strong>Lexical Overlap Constraint:</strong> TF-IDF relies on lexical token overlap and cannot reliably identify semantic synonyms (for example, "cop" versus "police officer") without dense semantic embeddings.
                   </li>
                   <li>
-                    <strong>Coarse Genre Taxonomy:</strong> With only 20 genres, subgenres (e.g. Slasher vs Psychological Horror) are treated identically.
+                    <strong>Granularity of Genre Taxonomy:</strong> The 20-category genre taxonomy treats distinct subgenres within the same category identically.
                   </li>
                   <li>
-                    <strong>Cold-Start Dependency:</strong> Personalized models remain locked until at least 5 ratings are submitted to prevent under-constrained preference vectors.
+                    <strong>Cold-Start Threshold:</strong> Personalized models remain locked until at least 5 ratings are provided to avoid under-constrained preference vectors.
                   </li>
                 </ul>
               </div>

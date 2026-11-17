@@ -267,16 +267,20 @@ async function runTests() {
   const indexCss = fs.readFileSync(path.join(rootDir, 'frontend/src/index.css'), 'utf-8');
   assert(indexCss.includes('.star-button.filled .star-icon') && indexCss.includes('#fbbf24'), 'CSS contains explicit .star-button.filled rule with golden color');
 
-  // TEST J: Movie Poster Branded Fallback
-  console.log('\n--- TEST J: Movie Poster Branded Fallback ---');
+  // TEST J: Actual Movie Posters & Neutral Fallback
+  console.log('\n--- TEST J: Actual Movie Posters & Neutral Fallback ---');
   const movieCardCode = fs.readFileSync(path.join(rootDir, 'frontend/src/components/MovieCard.jsx'), 'utf-8');
-  assert(movieCardCode.includes('branded-poster'), 'MovieCard.jsx incorporates branded-poster fallback');
-  assert(movieCardCode.includes('getPosterTheme'), 'MovieCard.jsx dynamically styles posters by genre theme');
-  assert(movieCardCode.includes('MOVIEMATCH'), 'Fallback poster includes MovieMatch brand badge');
-  assert(indexCss.includes('.poster-fallback.branded-poster'), 'CSS contains dedicated .branded-poster styling');
+  assert(movieCardCode.includes('movie-poster'), 'MovieCard.jsx renders real movie posters with movie-poster class');
+  assert(movieCardCode.includes('neutral-fallback'), 'MovieCard.jsx incorporates clean neutral-fallback');
+  assert(!movieCardCode.includes('getPosterTheme'), 'MovieCard.jsx removed artificial colorful gradients');
+  assert(indexCss.includes('.poster-fallback.neutral-fallback'), 'CSS contains dedicated .neutral-fallback styling');
 
-  // TEST K: Project Analysis Tab & 10 Required Sections
-  console.log('\n--- TEST K: Project Analysis Tab & 10 Required Sections ---');
+  // Verify verified posters in popularity.json
+  const verifiedInPop = popularityData.filter(m => m.poster_url && m.poster_url.includes('image.tmdb.org'));
+  assert(verifiedInPop.length === popularityData.length, `100% of popularity movies have verified TMDB posters (${verifiedInPop.length}/${popularityData.length})`);
+
+  // TEST K: Mathematical Equation Readability & Academic Presentation
+  console.log('\n--- TEST K: Mathematical Equation Readability & Academic Presentation ---');
   const navbarCode = fs.readFileSync(path.join(rootDir, 'frontend/src/components/Navbar.jsx'), 'utf-8');
   assert(navbarCode.includes('Project Analysis') && navbarCode.includes('BookOpen'), 'Navbar.jsx contains Project Analysis tab');
 
@@ -284,6 +288,14 @@ async function runTests() {
   assert(appCode.includes('ProjectAnalysisSection'), 'App.jsx imports and routes ProjectAnalysisSection');
 
   const analysisCode = fs.readFileSync(path.join(rootDir, 'frontend/src/components/ProjectAnalysisSection.jsx'), 'utf-8');
+  assert(!analysisCode.toLowerCase().includes('viva'), 'ProjectAnalysisSection.jsx contains no examination/viva references');
+  assert(analysisCode.includes('MathEquation'), 'ProjectAnalysisSection.jsx uses MathEquation KaTeX component');
+  assert(analysisCode.includes('Top-K') && analysisCode.includes('argmax'), 'Top-K formula rendered with KaTeX');
+  assert(analysisCode.includes('\\text{WR}(m)'), 'IMDb Bayesian Weighted Rating formula rendered with KaTeX');
+  assert(analysisCode.includes('\\vec{p}_u'), 'TF-IDF preference profile rendered with KaTeX');
+  assert(analysisCode.includes('S_{\\text{hybrid}}'), 'Hybrid quality score formula rendered with KaTeX');
+  assert(indexCss.includes('.math-block-container'), 'CSS contains dedicated .math-block-container styling');
+
   const requiredSections = [
     'sec-problem',
     'sec-data',

@@ -3,64 +3,6 @@ import { Film, Calendar, Star } from 'lucide-react';
 import { StarRating } from './StarRating';
 import { useRatings } from '../context/RatingsContext';
 
-function getPosterTheme(genres = []) {
-  const g = genres[0] || '';
-  if (['Action', 'Adventure'].includes(g)) {
-    return {
-      gradient: 'linear-gradient(150deg, #450a0a 0%, #1e1b4b 60%, #030712 100%)',
-      accent: '#f87171',
-      badge: 'ACTION • ADVENTURE',
-    };
-  }
-  if (['Science Fiction', 'Fantasy'].includes(g)) {
-    return {
-      gradient: 'linear-gradient(150deg, #0c4a6e 0%, #1e1b4b 60%, #020617 100%)',
-      accent: '#38bdf8',
-      badge: 'SCI-FI & FANTASY',
-    };
-  }
-  if (['Animation', 'Family'].includes(g)) {
-    return {
-      gradient: 'linear-gradient(150deg, #065f46 0%, #0f172a 60%, #020617 100%)',
-      accent: '#34d399',
-      badge: 'ANIMATION • FAMILY',
-    };
-  }
-  if (['Comedy', 'Romance'].includes(g)) {
-    return {
-      gradient: 'linear-gradient(150deg, #831843 0%, #2e1065 60%, #050508 100%)',
-      accent: '#f472b6',
-      badge: 'COMEDY & ROMANCE',
-    };
-  }
-  if (['Crime', 'Thriller', 'Mystery'].includes(g)) {
-    return {
-      gradient: 'linear-gradient(150deg, #78350f 0%, #1c1917 60%, #09090b 100%)',
-      accent: '#fbbf24',
-      badge: 'THRILLER • CRIME',
-    };
-  }
-  if (['Horror'].includes(g)) {
-    return {
-      gradient: 'linear-gradient(150deg, #450a0a 0%, #180808 60%, #000000 100%)',
-      accent: '#ef4444',
-      badge: 'HORROR CINEMA',
-    };
-  }
-  if (['Drama', 'History', 'War'].includes(g)) {
-    return {
-      gradient: 'linear-gradient(150deg, #3b2506 0%, #18181b 60%, #09090b 100%)',
-      accent: '#f59e0b',
-      badge: 'DRAMA & CINEMA',
-    };
-  }
-  return {
-    gradient: 'linear-gradient(150deg, #1e1b4b 0%, #1e293b 60%, #030712 100%)',
-    accent: '#818cf8',
-    badge: 'MOVIEMATCH SELECTION',
-  };
-}
-
 export const MovieCard = ({
   movie,
   rank,
@@ -84,8 +26,6 @@ export const MovieCard = ({
     score,
     score_type,
   } = movie;
-
-  const posterTheme = getPosterTheme(genres);
 
   const currentRating = movie.user_rating !== undefined ? movie.user_rating : getRatingForMovie(tmdbId);
 
@@ -141,58 +81,37 @@ export const MovieCard = ({
         {poster_url && !imageError ? (
           <img
             src={poster_url}
-            alt={title}
+            alt={title ? `${title} (${release_year || 'Movie'}) poster` : 'Movie poster'}
             className="movie-poster"
             loading="lazy"
             onError={() => setImageError(true)}
           />
         ) : (
-          <div
-            className="poster-fallback branded-poster"
-            style={{ background: posterTheme.gradient }}
-          >
-            <div className="branded-poster-header">
-              <span className="branded-logo-tag">
-                <Film size={11} className="branded-mini-icon" style={{ color: posterTheme.accent }} />
-                <span>MOVIEMATCH</span>
-              </span>
-              <span className="branded-genre-tag" style={{ color: posterTheme.accent }}>
-                {posterTheme.badge}
-              </span>
-            </div>
-
-            <div className="branded-poster-body">
-              <div
-                className="branded-emblem"
-                style={{
-                  borderColor: `${posterTheme.accent}40`,
-                  boxShadow: `0 0 24px ${posterTheme.accent}25`,
-                }}
-              >
-                <Film size={32} style={{ color: posterTheme.accent }} />
+          <div className="poster-fallback neutral-fallback">
+            <div className="neutral-fallback-body">
+              <div className="neutral-fallback-icon">
+                <Film size={36} strokeWidth={1.5} className="neutral-film-icon" />
               </div>
-              <h4 className="branded-poster-title" title={title}>
+              <h4 className="neutral-fallback-title" title={title}>
                 {title}
               </h4>
               {release_year ? (
-                <span className="branded-poster-year">
+                <span className="neutral-fallback-year">
                   <Calendar size={12} />
                   {release_year}
                 </span>
               ) : null}
-            </div>
-
-            <div className="branded-poster-footer">
-              <div
-                className="branded-cinema-stripe"
-                style={{
-                  background: `linear-gradient(90deg, transparent, ${posterTheme.accent}, transparent)`,
-                }}
-              />
-              <span className="branded-edition-text">
-                {genres && genres.length > 0 ? genres.slice(0, 2).join(' • ') : 'Cinematic Release'}
+              <span className="neutral-fallback-badge">
+                Poster Unavailable
               </span>
             </div>
+            {genres && genres.length > 0 && (
+              <div className="neutral-fallback-footer">
+                <span className="neutral-genre-text">
+                  {genres.slice(0, 2).join(' • ')}
+                </span>
+              </div>
+            )}
           </div>
         )}
 
