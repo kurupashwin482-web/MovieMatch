@@ -5,11 +5,12 @@ import { RatingProgressBar } from './components/RatingProgressBar';
 import { RecommendationSection } from './components/RecommendationSection';
 import { MovieSearchSection } from './components/MovieSearchSection';
 import { RatedMoviesSection } from './components/RatedMoviesSection';
+import { ProjectAnalysisSection } from './components/ProjectAnalysisSection';
 import { Toast } from './components/Toast';
 
 export default function App() {
   const { loading } = useRatings();
-  const [currentView, setCurrentView] = useState('recommendations'); // 'recommendations', 'search', 'ratings'
+  const [currentView, setCurrentView] = useState('recommendations'); // 'recommendations', 'search', 'ratings', 'analysis'
   const [toast, setToast] = useState(null); // { message, type }
 
   const showToast = (message, type = 'success') => {
@@ -49,9 +50,11 @@ export default function App() {
       <main className="main-content">
         <div className="dashboard-container">
           {/* Rating Progress Bar */}
-          <RatingProgressBar
-            onExploreClick={() => setCurrentView('search')}
-          />
+          {currentView !== 'analysis' && (
+            <RatingProgressBar
+              onExploreClick={() => setCurrentView('search')}
+            />
+          )}
 
           {/* Active View Container */}
           {currentView === 'recommendations' && (
@@ -74,6 +77,10 @@ export default function App() {
               onDeleteRating={handleDeleteRating}
               onClearRatings={handleClearRatings}
             />
+          )}
+
+          {currentView === 'analysis' && (
+            <ProjectAnalysisSection />
           )}
         </div>
       </main>

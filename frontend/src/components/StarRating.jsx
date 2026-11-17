@@ -11,7 +11,8 @@ export const StarRating = ({
 }) => {
   const [hoverRating, setHoverRating] = useState(0);
 
-  const activeValue = hoverRating || rating || 0;
+  const numericRating = typeof rating === 'number' ? rating : Number(rating) || 0;
+  const activeValue = hoverRating > 0 ? hoverRating : numericRating;
 
   const handleClick = (value) => {
     if (disabled || !interactive) return;
@@ -35,23 +36,26 @@ export const StarRating = ({
       <div className="star-rating-stars">
         {[1, 2, 3, 4, 5].map((starIndex) => {
           const isFilled = activeValue >= starIndex;
-          const isHalf = activeValue >= starIndex - 0.5 && activeValue < starIndex;
 
           return (
             <button
               key={starIndex}
               type="button"
-              className={`star-button ${isFilled ? 'filled' : ''} ${isHalf ? 'half' : ''} ${
+              className={`star-button ${isFilled ? 'filled' : 'unfilled'} ${
                 disabled || !interactive ? 'cursor-default' : 'cursor-pointer'
               }`}
               onClick={() => handleClick(starIndex)}
               onMouseEnter={() => handleMouseEnter(starIndex)}
               disabled={disabled || !interactive}
               title={`Rate ${starIndex} star${starIndex > 1 ? 's' : ''}`}
+              aria-label={`${starIndex} star${starIndex > 1 ? 's' : ''}`}
             >
               <Star
                 size={size}
-                className={`star-icon ${isFilled ? 'fill-yellow-400 text-yellow-400' : 'text-zinc-600'}`}
+                fill={isFilled ? '#fbbf24' : 'none'}
+                color={isFilled ? '#fbbf24' : '#71717a'}
+                strokeWidth={isFilled ? 1.5 : 2}
+                className={`star-icon ${isFilled ? 'filled' : 'unfilled'}`}
               />
             </button>
           );

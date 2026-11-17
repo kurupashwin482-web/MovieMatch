@@ -164,3 +164,31 @@ def test_different_ratings_produce_different_recommendations(client):
 
     # They should produce distinct recommendation lists
     assert recs1 != recs2
+
+
+def test_variable_k_handling_across_all_methods(client):
+    """Verify that K values from 5 through 20 are handled correctly by all 3 recommendation methods."""
+    seed_ratings = {
+        98344: 5.0,
+        351863: 4.5,
+        73941: 3.0,
+        257109: 1.5,
+        315669: 2.0
+    }
+
+    for k_val in [5, 12, 15, 20]:
+        # 1. Popularity
+        pop_resp = client.post("/recommendations/popularity", json={"rated_movie_ids": list(seed_ratings.keys()), "k": k_val})
+        assert pop_resp.status_code == 200
+        assert len(pop_resp.json()["movies"]) == k_val
+
+        # 2. TF-IDF
+        tfidf_resp = client.post("/recommendations/tfidf", json={"ratings": seed_ratings, "k": k_val})
+        assert tfidf_resp.status_code == 200
+        assert len(tfidf_resp.json()["movies"]) == k_val
+
+        # 3. Genre
+        genre_resp = client.post("/recommendations/genre", json={"ratings": seed_ratings, "k": k_val})
+        assert genre_resp.status_code == 200
+        assert len(genre_resp.json()["movies"]) == k_val
+

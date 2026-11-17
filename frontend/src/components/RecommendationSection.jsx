@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Flame, Compass, Dna, RefreshCw, Lock, Sparkles, AlertCircle } from 'lucide-react';
+import { Flame, Compass, Dna, RefreshCw, Lock, Sparkles, AlertCircle, SlidersHorizontal } from 'lucide-react';
 import { MovieCard } from './MovieCard';
 import { api } from '../services/api';
 import { useRatings } from '../context/RatingsContext';
@@ -7,6 +7,7 @@ import { useRatings } from '../context/RatingsContext';
 export const RecommendationSection = ({ onExploreClick, onRateMovie }) => {
   const { ratingsCount, requiredRatings, personalizedUnlocked, getRatingsPayload, getRatedMovieIds } = useRatings();
   const [activeTab, setActiveTab] = useState('popularity');
+  const [topK, setTopK] = useState(10);
   const [movies, setMovies] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -14,22 +15,24 @@ export const RecommendationSection = ({ onExploreClick, onRateMovie }) => {
   // Track request sequence to prevent tab-switching race conditions
   const requestIdRef = useRef(0);
 
-  const fetchRecommendations = useCallback(async (tab) => {
+  const fetchRecommendations = useCallback(async (tab, kVal = topK) => {
     const currentId = ++requestIdRef.current;
     setLoading(true);
     setError(null);
+
+    const targetK = Math.max(5, Math.min(20, Number(kVal) || 10));
 
     try {
       let data;
       if (tab === 'popularity') {
         const ratedIds = getRatedMovieIds();
-        data = await api.getPopularityRecommendations(ratedIds, 10);
+        data = await api.getPopularityRecommendations(ratedIds, targetK);
       } else if (tab === 'tfidf') {
         const payload = getRatingsPayload();
-        data = await api.getTfidfRecommendations(payload, 10);
+        data = await api.getTfidfRecommendations(payload, targetK);
       } else if (tab === 'genre') {
         const payload = getRatingsPayload();
-        data = await api.getGenreRecommendations(payload, 10);
+        data = await api.getGenreRecommendations(payload, targetK);
       }
 
       if (currentId !== requestIdRef.current) return;
@@ -47,17 +50,17 @@ export const RecommendationSection = ({ onExploreClick, onRateMovie }) => {
         setLoading(false);
       }
     }
-  }, [getRatingsPayload, getRatedMovieIds]);
+  }, [getRatingsPayload, getRatedMovieIds, topK]);
 
   useEffect(() => {
     if (activeTab === 'popularity' || personalizedUnlocked) {
-      fetchRecommendations(activeTab);
+      fetchRecommendations(activeTab, topK);
     } else {
       setMovies([]);
       setError(null);
       setLoading(false);
     }
-  }, [activeTab, personalizedUnlocked, fetchRecommendations]);
+  }, [activeTab, personalizedUnlocked, topK, fetchRecommendations]);
 
   const handleTabChange = (tab) => {
     setActiveTab(tab);
@@ -67,7 +70,7 @@ export const RecommendationSection = ({ onExploreClick, onRateMovie }) => {
 
   return (
     <div className="recommendations-container">
-      {/* Algorithm Tabs */}
+      {/* Algorithm Tabs & Top-K Controls Header */}
       <div className="algo-tabs-header">
         <div className="algo-tabs">
           <button
@@ -98,16 +101,43 @@ export const RecommendationSection = ({ onExploreClick, onRateMovie }) => {
           </button>
         </div>
 
-        <button
-          type="button"
-          className="btn-refresh"
-          onClick={() => fetchRecommendations(activeTab)}
-          disabled={loading || isTabLocked}
-          title="Regenerate recommendations"
-        >
-          <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-          <span>Generate / Refresh</span>
-        </button>
+        <div className="recommendation-controls-bar">
+          <div className="top-k-slider-container">
+            <div className="top-k-label-group">
+              <label htmlFor="top-k-slider" className="top-k-slider-label">
+                <SlidersHorizontal size={15} />
+                <span>Number of recommendations: <strong className="top-k-value-pill">{topK}</strong></span>
+              </label>
+              <span className="top-k-range-indicator">(5 – 20)</span>
+            </div>
+            <div className="top-k-slider-track-wrap">
+              <span className="slider-endpoint">5</span>
+              <input
+                id="top-k-slider"
+                type="range"
+                min="5"
+                max="20"
+                step="1"
+                value={topK}
+                onChange={(e) => setTopK(Number(e.target.value))}
+                className="top-k-range-input"
+                aria-label="Number of recommendations"
+              />
+              <span className="slider-endpoint">20</span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className="btn-refresh"
+            onClick={() => fetchRecommendations(activeTab, topK)}
+            disabled={loading || isTabLocked}
+            title="Regenerate recommendations with selected K"
+          >
+            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+            <span>Generate / Refresh</span>
+          </button>
+        </div>
       </div>
 
       {/* Algorithm Explanatory Banner */}

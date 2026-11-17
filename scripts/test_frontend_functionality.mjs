@@ -222,6 +222,91 @@ async function runTests() {
   const cleared = storage.getRatings();
   assert(Object.keys(cleared).length === 0, 'All ratings successfully cleared');
 
+  // TEST H: Variable Top-K Slider Support
+  console.log('\n--- TEST H: Variable Top-K Slider Support ---');
+  // Re-seed 5 ratings for personalized models
+  storage.saveRating(testMovie1, 5.0);
+  storage.saveRating(testMovie2, 4.5);
+  storage.saveRating(testMovie3, 4.0);
+  storage.saveRating(testMovie4, 5.0);
+  storage.saveRating(testMovie5, 4.5);
+  const testPayload = storage.getRatingsPayload();
+  const testRatedIds = storage.getRatedMovieIds();
+
+  // Test K = 5
+  const pop5 = await api.getPopularityRecommendations(testRatedIds, 5);
+  assert(pop5.movies.length === 5, 'Popularity recommendations with K=5 returns 5 movies');
+  const genre5 = await api.getGenreRecommendations(testPayload, 5);
+  assert(genre5.movies.length === 5, 'Genre recommendations with K=5 returns 5 movies');
+  const tfidf5 = await api.getTfidfRecommendations(testPayload, 5);
+  assert(tfidf5.movies.length === 5, 'TF-IDF recommendations with K=5 returns 5 movies');
+
+  // Test K = 15
+  const pop15 = await api.getPopularityRecommendations(testRatedIds, 15);
+  assert(pop15.movies.length === 15, 'Popularity recommendations with K=15 returns 15 movies');
+  const genre15 = await api.getGenreRecommendations(testPayload, 15);
+  assert(genre15.movies.length === 15, 'Genre recommendations with K=15 returns 15 movies');
+  const tfidf15 = await api.getTfidfRecommendations(testPayload, 15);
+  assert(tfidf15.movies.length === 15, 'TF-IDF recommendations with K=15 returns 15 movies');
+
+  // Test K = 20
+  const pop20 = await api.getPopularityRecommendations(testRatedIds, 20);
+  assert(pop20.movies.length === 20, 'Popularity recommendations with K=20 returns 20 movies');
+  const genre20 = await api.getGenreRecommendations(testPayload, 20);
+  assert(genre20.movies.length === 20, 'Genre recommendations with K=20 returns 20 movies');
+  const tfidf20 = await api.getTfidfRecommendations(testPayload, 20);
+  assert(tfidf20.movies.length === 20, 'TF-IDF recommendations with K=20 returns 20 movies');
+
+  // TEST I: Star Display Fix & Golden Styling
+  console.log('\n--- TEST I: Star Display & Golden Styling ---');
+  const starRatingCode = fs.readFileSync(path.join(rootDir, 'frontend/src/components/StarRating.jsx'), 'utf-8');
+  assert(starRatingCode.includes('#fbbf24'), 'StarRating.jsx uses #fbbf24 golden color for filled stars');
+  assert(starRatingCode.includes('activeValue >= starIndex'), 'StarRating.jsx determines filled state correctly');
+  assert(starRatingCode.includes('fill={isFilled ? \'#fbbf24\' : \'none\'}'), 'Star SVG fill prop properly bound');
+
+  const indexCss = fs.readFileSync(path.join(rootDir, 'frontend/src/index.css'), 'utf-8');
+  assert(indexCss.includes('.star-button.filled .star-icon') && indexCss.includes('#fbbf24'), 'CSS contains explicit .star-button.filled rule with golden color');
+
+  // TEST J: Movie Poster Branded Fallback
+  console.log('\n--- TEST J: Movie Poster Branded Fallback ---');
+  const movieCardCode = fs.readFileSync(path.join(rootDir, 'frontend/src/components/MovieCard.jsx'), 'utf-8');
+  assert(movieCardCode.includes('branded-poster'), 'MovieCard.jsx incorporates branded-poster fallback');
+  assert(movieCardCode.includes('getPosterTheme'), 'MovieCard.jsx dynamically styles posters by genre theme');
+  assert(movieCardCode.includes('MOVIEMATCH'), 'Fallback poster includes MovieMatch brand badge');
+  assert(indexCss.includes('.poster-fallback.branded-poster'), 'CSS contains dedicated .branded-poster styling');
+
+  // TEST K: Project Analysis Tab & 10 Required Sections
+  console.log('\n--- TEST K: Project Analysis Tab & 10 Required Sections ---');
+  const navbarCode = fs.readFileSync(path.join(rootDir, 'frontend/src/components/Navbar.jsx'), 'utf-8');
+  assert(navbarCode.includes('Project Analysis') && navbarCode.includes('BookOpen'), 'Navbar.jsx contains Project Analysis tab');
+
+  const appCode = fs.readFileSync(path.join(rootDir, 'frontend/src/App.jsx'), 'utf-8');
+  assert(appCode.includes('ProjectAnalysisSection'), 'App.jsx imports and routes ProjectAnalysisSection');
+
+  const analysisCode = fs.readFileSync(path.join(rootDir, 'frontend/src/components/ProjectAnalysisSection.jsx'), 'utf-8');
+  const requiredSections = [
+    'sec-problem',
+    'sec-data',
+    'sec-preprocessing',
+    'sec-eda',
+    'sec-models',
+    'sec-eval',
+    'sec-results',
+    'sec-errors',
+    'sec-limitations',
+    'sec-reproducibility',
+  ];
+  const allSectionsPresent = requiredSections.every(secId => analysisCode.includes(secId));
+  assert(allSectionsPresent, `ProjectAnalysisSection.jsx contains all 10 required academic sections`);
+
+  assert(analysisCode.includes('Ashwin Kurup'), 'Individual project author identified');
+  assert(analysisCode.includes('Bayesian Popularity'), 'Bayesian Popularity model detailed');
+  assert(analysisCode.includes('TF-IDF Content'), 'TF-IDF Content model detailed');
+  assert(analysisCode.includes('Genre-Based Hybrid'), 'Genre-Based Hybrid model detailed');
+  assert(analysisCode.includes('16.98%'), 'Authentic Precision@10 result present');
+  assert(analysisCode.includes('5.27%'), 'Authentic Recall@10 result present');
+  assert(analysisCode.includes('18.36%'), 'Authentic NDCG@10 result present');
+
   console.log('\n====================================================');
   console.log(`SUMMARY: ${passed} PASSED, ${failed} FAILED`);
   console.log('====================================================');

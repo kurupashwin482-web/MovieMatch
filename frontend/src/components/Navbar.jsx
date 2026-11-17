@@ -1,5 +1,5 @@
 import React from 'react';
-import { Film, Compass, Search, Star, Sparkles } from 'lucide-react';
+import { Film, Compass, Search, Star, Sparkles, BookOpen } from 'lucide-react';
 import { useRatings } from '../context/RatingsContext';
 
 export const Navbar = ({ currentView, onViewChange }) => {
@@ -49,6 +49,15 @@ export const Navbar = ({ currentView, onViewChange }) => {
             <Star size={17} />
             <span>My Ratings</span>
             {ratingsCount > 0 && <span className="nav-badge">{ratingsCount}</span>}
+          </button>
+
+          <button
+            type="button"
+            className={`nav-link ${currentView === 'analysis' ? 'active' : ''}`}
+            onClick={() => onViewChange('analysis')}
+          >
+            <BookOpen size={17} />
+            <span>Project Analysis</span>
           </button>
         </nav>
 
