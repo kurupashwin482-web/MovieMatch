@@ -375,8 +375,44 @@ class ApiService {
     }
   }
 
-  async checkHealth() {
-    return this.request('/health', {}, 2500);
+  getBaseUrl() {
+    return API_BASE_URL;
+  }
+
+  async checkHealth(timeoutMs = 4000) {
+    try {
+      const data = await this.request('/health', {}, timeoutMs);
+      return Boolean(data && data.status === 'ok');
+    } catch {
+      return false;
+    }
+  }
+
+  async waitForBackend({ maxAttempts = 5, timeoutPerAttempt = 9000, intervalMs = 2500, onProgress } = {}) {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      if (onProgress) {
+        onProgress({
+          attempt,
+          maxAttempts,
+          message: `Pinging backend (attempt ${attempt} of ${maxAttempts})...`,
+        });
+      }
+      try {
+        const isHealthy = await this.checkHealth(timeoutPerAttempt);
+        if (isHealthy) {
+          return { ready: true, attempts: attempt };
+        }
+      } catch {
+        // Attempt failed, continue to next
+      }
+      if (attempt < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+      }
+    }
+    return {
+      ready: false,
+      error: `Could not reach live backend at ${API_BASE_URL} after ${maxAttempts} attempts. The service may be asleep, suspended on Render, or experiencing network limits.`,
+    };
   }
 }
 

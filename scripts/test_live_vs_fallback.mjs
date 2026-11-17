@@ -68,25 +68,33 @@ async function checkHealth() {
   const genreLive = await api.getGenreRecommendations(ratings, 5);
   console.log('  [PASS] Live Genre: is_fallback =', genreLive.is_fallback, '| Top title =', genreLive.movies[0]?.title, '| Score =', genreLive.movies[0]?.score);
 
+  // Test 4: Live waitForBackend responds ready: true on attempt 1
+  const liveWait = await api.waitForBackend({ maxAttempts: 2, timeoutPerAttempt: 2000, intervalMs: 200 });
+  console.log('  [PASS] Live waitForBackend: ready =', liveWait.ready, '| Attempts =', liveWait.attempts);
+
   // Terminate backend to simulate cold start / sleep
   py.kill();
   await new Promise((r) => setTimeout(r, 600));
   console.log('\nSimulating sleeping backend / cold-start timeout...');
 
-  // Test 4: Offline Fallback Popularity
+  // Test 5: Offline Fallback Popularity
   const popFallback = await api.getPopularityRecommendations([27205], 5, 500);
   console.log('  [PASS] Offline Popularity: is_fallback =', popFallback.is_fallback, '| Count =', popFallback.movies.length);
 
-  // Test 5: Offline Fallback TF-IDF
+  // Test 6: Offline Fallback TF-IDF
   const tfidfFallback = await api.getTfidfRecommendations(ratings, 5, 500);
   console.log('  [PASS] Offline TF-IDF: is_fallback =', tfidfFallback.is_fallback, '| Count =', tfidfFallback.movies.length);
 
-  // Test 6: Offline Fallback Genre
+  // Test 7: Offline Fallback Genre
   const genreFallback = await api.getGenreRecommendations(ratings, 5, 500);
   console.log('  [PASS] Offline Genre: is_fallback =', genreFallback.is_fallback, '| Count =', genreFallback.movies.length);
 
-  if (popLive.is_fallback === false && tfidfLive.is_fallback === false && genreLive.is_fallback === false &&
-      popFallback.is_fallback === true && tfidfFallback.is_fallback === true && genreFallback.is_fallback === true) {
+  // Test 8: Offline waitForBackend exhausts attempts and provides meaningful error
+  const offlineWait = await api.waitForBackend({ maxAttempts: 2, timeoutPerAttempt: 300, intervalMs: 100 });
+  console.log('  [PASS] Offline waitForBackend: ready =', offlineWait.ready, '| Has error =', Boolean(offlineWait.error));
+
+  if (popLive.is_fallback === false && tfidfLive.is_fallback === false && genreLive.is_fallback === false && liveWait.ready === true &&
+      popFallback.is_fallback === true && tfidfFallback.is_fallback === true && genreFallback.is_fallback === true && offlineWait.ready === false) {
     console.log('\n======================================================');
     console.log('ALL LIVE VS FALLBACK INTEGRATION TESTS PASSED!');
     console.log('======================================================\n');

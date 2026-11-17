@@ -13,32 +13,30 @@ export const RecommendationSection = ({ onExploreClick, onRateMovie }) => {
   const [error, setError] = useState(null);
   const [isFallback, setIsFallback] = useState(false);
   const [retryingLive, setRetryingLive] = useState(false);
+  const [connectionMessage, setConnectionMessage] = useState('');
+  const [connectionError, setConnectionError] = useState(null);
 
   // Track request sequence to prevent tab-switching race conditions
   const requestIdRef = useRef(0);
 
-  const fetchRecommendations = useCallback(async (tab, kVal = topK, isRetry = false) => {
+  const fetchRecommendations = useCallback(async (tab, kVal = topK) => {
     const currentId = ++requestIdRef.current;
     setLoading(true);
     setError(null);
-    if (isRetry) {
-      setRetryingLive(true);
-    }
 
     const targetK = Math.max(5, Math.min(20, Number(kVal) || 10));
-    const timeoutMs = isRetry ? 45000 : undefined;
 
     try {
       let data;
       if (tab === 'popularity') {
         const ratedIds = getRatedMovieIds();
-        data = await api.getPopularityRecommendations(ratedIds, targetK, timeoutMs);
+        data = await api.getPopularityRecommendations(ratedIds, targetK);
       } else if (tab === 'tfidf') {
         const payload = getRatingsPayload();
-        data = await api.getTfidfRecommendations(payload, targetK, timeoutMs);
+        data = await api.getTfidfRecommendations(payload, targetK);
       } else if (tab === 'genre') {
         const payload = getRatingsPayload();
-        data = await api.getGenreRecommendations(payload, targetK, timeoutMs);
+        data = await api.getGenreRecommendations(payload, targetK);
       }
 
       if (currentId !== requestIdRef.current) return;
@@ -48,20 +46,64 @@ export const RecommendationSection = ({ onExploreClick, onRateMovie }) => {
       if (currentId !== requestIdRef.current) return;
       if (err.status === 400 && (tab === 'tfidf' || tab === 'genre')) {
         setError(err.message || 'At least 5 ratings required for personalized recommendations.');
-        setMovies([]);
       } else {
-        if (!isRetry) {
-          setError(err.message || 'Failed to load recommendations. Please try again.');
-          setMovies([]);
-        }
+        setError(err.message || 'Failed to load recommendations. Please try again.');
       }
+      setMovies([]);
     } finally {
       if (currentId === requestIdRef.current) {
         setLoading(false);
-        setRetryingLive(false);
       }
     }
   }, [getRatingsPayload, getRatedMovieIds, topK]);
+
+  // Connect to live backend with multi-attempt progressive health checks
+  const handleConnectLiveBackend = useCallback(async () => {
+    setRetryingLive(true);
+    setConnectionError(null);
+    setConnectionMessage('Pinging cloud backend (attempt 1 of 5)...');
+
+    const result = await api.waitForBackend({
+      maxAttempts: 5,
+      timeoutPerAttempt: 9000,
+      intervalMs: 2500,
+      onProgress: ({ attempt, maxAttempts }) => {
+        setConnectionMessage(
+          `Waking up cloud backend (attempt ${attempt} of ${maxAttempts})...`
+        );
+      },
+    });
+
+    if (result.ready) {
+      setConnectionMessage('Backend connected! Loading live recommendations...');
+      setConnectionError(null);
+      await fetchRecommendations(activeTab, topK);
+      setIsFallback(false);
+      setRetryingLive(false);
+      setConnectionMessage('');
+    } else {
+      setRetryingLive(false);
+      setConnectionMessage('');
+      setConnectionError(
+        result.error || 'Live backend service did not respond after 5 attempts. Continuing with client-side fallback.'
+      );
+    }
+  }, [activeTab, topK, fetchRecommendations]);
+
+  // On mount: check if live backend is already responsive
+  useEffect(() => {
+    let active = true;
+    const probe = async () => {
+      const alive = await api.checkHealth(3500);
+      if (!active) return;
+      if (alive) {
+        setIsFallback(false);
+        setConnectionError(null);
+      }
+    };
+    probe();
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     if (activeTab === 'popularity' || personalizedUnlocked) {
@@ -194,13 +236,28 @@ export const RecommendationSection = ({ onExploreClick, onRateMovie }) => {
           <button
             type="button"
             className="btn-retry-live"
-            onClick={() => fetchRecommendations(activeTab, topK, true)}
+            onClick={handleConnectLiveBackend}
             disabled={loading || retryingLive}
             title="Attempt to connect to the live FastAPI backend on Render"
           >
             <RefreshCw size={14} className={retryingLive ? 'animate-spin' : ''} />
-            <span>{retryingLive ? 'Connecting (~30s)...' : 'Connect to Live Backend'}</span>
+            <span>{retryingLive ? (connectionMessage || 'Connecting (~30s)...') : 'Connect to Live Backend'}</span>
           </button>
+          {connectionError && (
+            <div className="connection-error-box" style={{
+              width: '100%',
+              marginTop: '10px',
+              padding: '10px 14px',
+              background: 'rgba(239, 68, 68, 0.12)',
+              border: '1px solid rgba(239, 68, 68, 0.35)',
+              borderRadius: '6px',
+              color: '#fca5a5',
+              fontSize: '0.84rem',
+              lineHeight: '1.45',
+            }}>
+              <strong>Connection Notice:</strong> {connectionError}
+            </div>
+          )}
         </div>
       )}
 
@@ -235,7 +292,7 @@ export const RecommendationSection = ({ onExploreClick, onRateMovie }) => {
           <div className="spinner" />
           <p>
             {retryingLive
-              ? 'Waking up cloud ML backend container on Render (this may take up to 45 seconds)...'
+              ? (connectionMessage || 'Waking up cloud ML backend container on Render (this may take up to 45 seconds)...')
               : 'Computing recommendations via machine learning models...'}
           </p>
         </div>
