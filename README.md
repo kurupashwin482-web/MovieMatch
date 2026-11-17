@@ -29,30 +29,29 @@ Modern media and streaming platforms face fundamental algorithmic challenges whe
 
 ### Mathematical Definition of the Recommendation Task
 
-Given a catalogue of movies $M = \{m_1, m_2, \ldots, m_N\}$ and a visitor $u$ who has rated a subset of movies, let the user's rating history be:
+Given a catalogue of movies $M = \{m_1, m_2, \ldots, m_N\}$ and a visitor $u$ who has rated a subset of movies, the user rating history is defined as:
 
 $$
 R(u) = \{(m, r_{um}) \mid m \in M_u\}
 $$
 
 where:
-
 - $M_u$ is the set of movies rated by user $u$.
 - $r_{um}$ is the rating given by user $u$ to movie $m$, where $r_{um} \in [0.5, 5.0]$.
 
-The goal is to generate an ordered list of $K = 10$ previously unrated candidate movies from $C(u)$ that maximize the scoring function:
-
-$$
-\text{Top-}K(u) = \operatorname*{arg\,max}_{S \subseteq C(u),\, |S|=K} \sum_{m \in S} S(u, m)
-$$
-
-The set of candidate movies is:
+The candidate movie set available for recommendation consists of all unrated movies:
 
 $$
 C(u) = M \setminus M_u
 $$
 
-where $S(u, m)$ represents the scoring function specific to each recommendation method. The system calculates $S(u, m)$ for every candidate movie, sorts the candidates in descending order of their scores, and returns the 10 highest-scoring movies.
+The Top-$K$ recommendation objective selects an ordered set of $K = 10$ unrated candidate movies that maximize the scoring function:
+
+$$
+\operatorname{TopK}(u) = \underset{S \subseteq C(u), |S|=K}{\arg\max} \sum_{m \in S} S(u, m)
+$$
+
+where $S(u, m)$ represents the scoring function specific to each recommendation method. The system calculates $S(u, m)$ for every candidate movie in $C(u)$, sorts them in descending order of score, and returns the 10 highest-scoring movies.
 
 ---
 
@@ -94,9 +93,12 @@ $$
 
 ### B. TF-IDF Content-Based Recommender (Plot Semantic Profile)
 * **Notebook**: `Notebooks/03_tfidf_recommender.ipynb`
-* **Artifacts**: `Backend Artifacts/tfidf_matrix.pkl` ($12,794 \times 20,000$ sparse matrix), `movie_id_to_index.pkl`, `tfidf_vectorizer.pkl`.
-* **Mathematical Formulation**:
-  1. **Text Representation**: Term Frequency-Inverse Document Frequency extracts 20,000 unigrams and bigrams from cleaned plot summaries (`overview`):
+* **Artifacts**: `Backend Artifacts/tfidf_matrix.pkl` (12,794 movies $\times$ 20,000 sparse matrix), `movie_id_to_index.pkl`, `tfidf_vectorizer.pkl`.
+* **Serving Rule**: Requires at least 5 distinct rated movies; excludes already-rated movies and movies without overviews.
+
+**1. Text Representation**
+
+Term Frequency-Inverse Document Frequency extracts 20,000 unigrams and bigrams from cleaned plot overviews:
 
 $$
 \text{TF}(t, d) = \frac{f_{t,d}}{\sum_{t' \in d} f_{t', d}}, \quad \text{IDF}(t, D) = \ln\left(\frac{1 + |D|}{1 + |\{d \in D : t \in d\}|}\right) + 1
@@ -106,72 +108,100 @@ $$
 \text{TF-IDF}(t, d, D) = \text{TF}(t, d) \times \text{IDF}(t, D)
 $$
 
-  2. **Dynamic User Taste Profile**: Constructed from the visitor's ratings using a signed linear weighting scheme:
+**2. Dynamic User Taste Profile**
+
+The user preference profile is constructed as a weighted sum of the TF-IDF feature vectors of all movies rated by the user:
 
 $$
 P_u = \sum_{i \in \text{Rated}(u)} w(r_{ui}) \cdot V_i
 $$
 
-     where the rating weight $w(r)$ is:
+where:
+- $P_u$ is the user preference profile vector in the 20,000-dimensional vocabulary space.
+- $V_i$ is the TF-IDF feature vector of movie $i$.
+- $w(r_{ui})$ is the rating-weight function applied to user $u$'s rating for movie $i$.
+
+The rating-weight function centers ratings around the neutral midpoint:
 
 $$
 w(r) = \begin{cases} 0.1 & \text{if } r = 3.0 \\ r - 3.0 & \text{otherwise} \end{cases}
 $$
 
-     - Ratings above 3.0 positively amplify vocabulary terms (e.g., $r=5.0 \implies w=+2.0$).
-     - Ratings below 3.0 penalize vocabulary terms (e.g., $r=1.0 \implies w=-2.0$).
-     - Neutral ratings ($r=3.0$) provide mild positive anchoring ($w=+0.1$).
-  3. **Similarity Scoring**: Computes cosine similarity between profile vector $P_u$ and all movie feature vectors $V_m$:
+How ratings affect vocabulary weights in the profile:
+- Positive ratings (above 3.0 stars) give positive weight to plot keywords (for example, a 5.0-star rating assigns a weight of +2.0).
+- Negative ratings (below 3.0 stars) give negative weight to plot keywords (for example, a 1.0-star rating assigns a weight of -2.0).
+- Neutral ratings (exactly 3.0 stars) provide a mild positive anchor with a weight of +0.1.
+
+**3. Cosine Similarity Scoring**
+
+The match between the user profile vector and each candidate movie vector is computed using cosine similarity:
 
 $$
-\text{sim}(P_u, V_m) = \frac{P_u \cdot V_m}{\|P_u\| \|V_m\|}
+\operatorname{sim}(P_u, V_m) = \frac{P_u \cdot V_m}{\|P_u\| \|V_m\|}
 $$
 
-* **Serving Rule**: Requires at least **5 distinct rated movies**; excludes already-rated movies and movies without overviews.
+where:
+- $P_u$ is the user profile vector.
+- $V_m$ is the TF-IDF feature vector of candidate movie $m$.
+- $\|P_u\|$ and $\|V_m\|$ are the Euclidean norms of the vectors.
 
 ---
 
 ### C. Genre-Based Hybrid Recommender (Taste & Quality Blend)
 * **Notebook**: `Notebooks/04_Genre_Based_Movie_Recommendation_System.ipynb`
 * **Artifact**: `Backend Artifacts/genre_model.pkl` (12,262 movies $\times$ 20 genres, normalized quality scores $Q(m)$, and catalogue metadata).
-* **Mathematical Formulation**:
-  1. **Multi-Hot Binary Encoding**:
-     Each candidate film $m$ is represented by a 20-dimensional binary vector $G_m \in \{0, 1\}^{20}$, where $G_{m, g} = 1$ if movie $m$ is tagged with genre $g$, and $0$ otherwise.
+* **Serving Rule**: Requires at least 5 distinct rated movies; excludes already-rated movies.
 
-  2. **Positive-Only User Taste Profile**:
-     The visitor's genre preference vector $P_u$ is aggregated using only favorable ratings ($r_{ui} > 3.0$):
+**1. Multi-Hot Binary Genre Encoding**
+
+Each candidate movie $m$ is represented by a 20-dimensional binary genre vector:
+
+$$
+G_m \in \{0, 1\}^{20}
+$$
+
+where each element equals 1 if movie $m$ belongs to that genre, and 0 otherwise.
+
+**2. Positive-Only User Taste Profile**
+
+The user genre preference vector $P_u$ is aggregated using only favorable ratings ($r_{ui} > 3.0$):
 
 $$
 P_u = \sum_{i \in \text{Rated}(u)} \max(0, r_{ui} - 3.0) \cdot G_i
 $$
 
-     where:
-     - $P_u$: Aggregated genre preference profile vector for visitor $u$.
-     - $r_{ui}$: Star rating assigned by visitor $u$ to movie $i$.
-     - $G_i$: 20-dimensional multi-hot genre indicator vector for movie $i$.
+where:
+- $P_u$ is the user's 20-dimensional genre preference profile.
+- $r_{ui}$ is the star rating assigned by user $u$ to movie $i$.
+- $G_i$ is the binary multi-hot genre indicator vector of movie $i$.
 
-     Ratings above 3.0 contribute linearly to the visitor's genre profile, while ratings of 3.0 or below contribute 0. This avoids assuming that disliking one specific film implies disliking an entire genre.
+Ratings above 3.0 stars contribute linearly to the visitor's genre profile, while ratings of 3.0 or below contribute 0 using standard $\max(0, r_{ui} - 3.0)$ thresholding. This avoids assuming that disliking one specific film implies disliking an entire genre.
 
-  3. **Cosine Genre Similarity**:
-     The alignment between profile vector $P_u$ and candidate movie genre vector $G_m$ is computed using cosine similarity:
+**3. Cosine Genre Similarity**
+
+The alignment between user profile $P_u$ and candidate movie $m$ is computed using cosine similarity:
 
 $$
 G(u, m) = \frac{P_u \cdot G_m}{\|P_u\| \|G_m\|}
 $$
 
-     A higher similarity score indicates a closer match between candidate film $m$ and the visitor's preferred genres.
+where:
+- $P_u \cdot G_m$ is the dot product between the user genre profile and movie genre vector.
+- $\|P_u\|$ and $\|G_m\|$ are the Euclidean norms of the vectors.
+- A higher similarity score indicates a closer match between candidate film $m$ and the visitor's preferred genres.
 
-  4. **Hybrid Quality Score Integration**:
-     To prevent recommending low-quality or poorly received niche films, genre similarity is blended with the normalized Bayesian quality score $Q(m)$:
+**4. Hybrid Quality Score Integration**
+
+To prevent recommending low-quality or poorly received niche films, genre similarity is blended with the normalized Bayesian quality score:
 
 $$
 S(u, m) = \alpha \cdot G(u, m) + (1 - \alpha) \cdot Q(m)
 $$
 
-     where:
-     - $G(u, m)$: Cosine genre similarity between user $u$ and candidate movie $m$.
-     - $Q(m)$: Min-max normalized Bayesian weighted rating of movie $m$, $Q(m) \in [0, 1]$.
-     - $\alpha$: Hyperparameter weight, tuned to $\alpha = 0.5$ via validation grid search, balancing individual genre affinity and consensus film quality.
+where:
+- $G(u, m)$ is the cosine genre similarity between user $u$ and candidate movie $m$.
+- $Q(m)$ is the min-max normalized Bayesian weighted rating of movie $m$, scaled to $[0, 1]$.
+- $\alpha = 0.5$ is the balancing weight tuned via validation grid search, providing equal (50/50) balance between individual genre taste and consensus movie quality.
 
 * **Serving Rule**: Requires at least **5 distinct rated movies**; excludes already-rated movies.
 ---
